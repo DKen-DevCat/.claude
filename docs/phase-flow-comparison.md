@@ -139,7 +139,22 @@ CLAUDE.md の中盤に置いてあるだけで、新 PJ 立ち上げ時に「こ
 cf-local は 3 並列で軽量 (~5s)。nestify は 4 並列で 30s 前後。
 → 大きな差ではないが、tsc が遅い PJ では `--noEmit` を分割して `incremental` を効かせる工夫が要る。
 
-### 4.6 PJ 間の sync 戦略 (未決)
+### 4.6 セッション途中で追加した agent は **使えない** (2026-05-01 発見)
+
+cf-local PR #6 のドッグフード時に判明:
+
+- Claude Code の harness は **セッション開始時** に `.claude/agents/` をスキャンして `subagent_type` の候補を確定する
+- セッション途中で `.claude/agents/code-reviewer.md` を新規追加 → 同セッション内で `Agent(subagent_type: "code-reviewer")` を呼ぶと `Agent type 'code-reviewer' not found. Available agents: claude-code-guide, Explore, general-purpose, Plan, statusline-setup` で失敗する
+- セッション再起動で agent 一覧が更新され、以降は使える
+
+**実用上の意味**:
+- 新規 PJ で `.claude/agents/` を整備した直後は、必ず一度 Claude Code を再起動してから `/phase-review` 等を叩く
+- `/phase-kickoff` で agent を追加するフェーズの場合、kickoff の最後に「セッション再起動してください」と案内する余地あり
+- skill (`.claude/skills/`) も同じ挙動かは未確認。少なくとも skill は session 開始時の available skills リストに乗るので同様の可能性が高い
+
+→ `phase-kickoff` skill のドキュメントに「`.claude/agents/` を新規追加した直後はセッション再起動が必要」を一行追記する余地あり (将来 TODO)。
+
+### 4.7 PJ 間の sync 戦略 (未決)
 
 global skill は更新したら全 PJ に効くが、project skill (review-diff / check / rules) は手動コピーになる。
 → 候補:
@@ -312,3 +327,4 @@ flowchart LR
 
 - 2026-04-30: nestify を一次レファレンスとして cf-local に同構成を移植。本ドキュメント作成。
 - 2026-04-30: フロー図 4 種 (lifecycle / phase-review 内部 / skill 解決 / データフロー) を追加。
+- 2026-05-01: cf-local PR #6 ドッグフードで「セッション途中追加 agent は使えない」を発見、§4.6 に追記。
