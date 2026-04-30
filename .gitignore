@@ -1,0 +1,33 @@
+# macOS
+.DS_Store
+
+# runtime / cache
+cache/
+paste-cache/
+shell-snapshots/
+file-history/
+backups/
+debug/
+session-env/
+
+# logs / sessions / plans (auto-generated)
+history.jsonl
+sessions/
+projects/
+plans/
+
+# state
+todos/
+tasks/
+
+# telemetry / auth
+statsig/
+telemetry/
+stats-cache.json
+mcp-needs-auth-cache.json
+
+# local overrides / IDE / vendor
+settings.local.json
+plugins/
+ide/
+teams/
