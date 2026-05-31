@@ -1,6 +1,5 @@
 {
   "permissions": {
-    "defaultMode": "acceptEdits",
     "allow": [
       "Bash(*)",
       "mcp__firefox-devtools__*",
@@ -17,12 +16,14 @@
       "Bash(git reset --hard *)",
       "Bash(git clean -f*)",
       "Bash(git branch -D *)"
-    ]
+    ],
+    "defaultMode": "acceptEdits"
   },
   "enabledPlugins": {
     "typescript-lsp@claude-plugins-official": true,
     "gopls-lsp@claude-plugins-official": true
   },
-  "effortLevel": "high",
+  "effortLevel": "xhigh",
+  "skipWorkflowUsageWarning": true,
   "editorMode": "vim"
 }
