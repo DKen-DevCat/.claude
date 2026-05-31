@@ -154,7 +154,48 @@ cf-local PR #6 のドッグフード時に判明:
 
 → `phase-kickoff` skill のドキュメントに「`.claude/agents/` を新規追加した直後はセッション再起動が必要」を一行追記する余地あり (将来 TODO)。
 
-### 4.7 PJ 間の sync 戦略 (未決)
+### 4.7 cf-local PR #8 ドッグフード結果 (chore-1-4 / phase-4a 4a-18)
+
+cf-local Phase 4-A で `/phase-review --pr 8` を 2 回試走 (REV-1〜REV-7 / REV-1〜REV-4 の計 11 件、すべて採用)。`code-reviewer` agent 切替 (chore-1 PR #6) 後の初回ドッグフード。
+
+#### 観測軸 (a) `general-purpose` 比での粒度・正確性
+
+**改善あり**。`general-purpose` 時代に出がちだった「一般論的な改善提案」が消え、`.claude/rules/` 明文への紐付け指摘が増えた:
+
+- REV-1 (XmlnsCloudFront → XMLNSCloudFront) / REV-2 (WebACLId → WebACLID): `code-style.md` §命名「略語は大文字統一 (`URL`, `HTTP`, `XML`)」を直接根拠にした指摘
+- REV-2 (`fmt.Errorf("...")` → `errors.New("...")`): `code-style.md` §エラーハンドリング「wrap しない場合は `errors.New`」のパターン整合
+- REV-3 tagging handler テスト追加: `quality.md` §テスト「新規ロジックには `*_test.go`」「HTTP ハンドラは `httptest`」を明文引用
+- REV-4 `Reloader.nowFn` dead field 削除: `quality.md` §抽象化「重複が 3 回未満で抽象化されていたら過剰抽象の疑い」+ CLAUDE.md「過剰抽象化禁止」を根拠
+
+false positive は 11 件中 0。採用率 100% (採用ベース取下げ無し)。
+
+#### 観測軸 (b) 4 軸並列の効き — 特に軸 (4) 公式ドキュ準拠
+
+**軸 (4) は今回素通り**。11 件中、context7 で公式ドキュを引いた指摘は 0 件。AWS XML 仕様 / `encoding/xml` 慣用 / bbolt のベストプラクティスに踏み込んだ指摘は出ていない。
+
+ただし「素通り = 軸 (4) Agent が機能していない」と「素通り = 該当する逸脱がコード側に無い」が分離できていない。Phase 4-A は `awsxml.WriteXMLError` の自前実装や bbolt の `Update` 利用が新規導入されているので、軸 (4) が機能していれば 1 件は引っかかってもおかしくない領域。
+
+→ **次回観測**: phase-4b (Invalidation API 互換) で `/phase-review` 試走時に、軸 (4) Agent の出力を `general-purpose` の単体出力と比較する形で検証する余地。SKILL.md 側で 4 軸の出力を「どの軸由来か」明示してマージするよう変えると分離評価しやすい。
+
+#### 観測軸 (c) 設計思想整合 (軸 3) で design ドキュ参照が効いているか
+
+**部分的に効いている**。REV-4 (dead field 削除) で CLAUDE.md「動かないコードを増やすより動く範囲を少しずつ広げる」を引用した点は軸 (3) の効きと読める。一方、`.claude/design/phase-4a-terraform-2026-05-01.md` を直接根拠にした指摘は 0。
+
+スコープ越境チェック (Managed ORP seed が phase-4a スコープ外、Managed CachePolicy seed は phase-4a スコープ内) は **越境がそもそも発生していない** ため検証ケースなし。Phase 4a で「やらない」リストに抵触しそうな差分が無かったので、軸 (3) の真価は次フェーズ以降の試走待ち。
+
+#### 総合判断
+
+- code-reviewer agent への切替は **規約準拠系の指摘で確実に効いている** (粒度・採用率ともに改善)
+- 軸 (4) 公式ドキュ準拠は **空振り**。観測ケースが少なすぎて評価保留 (phase-4b で再検証)
+- 軸 (3) 設計思想整合は **CLAUDE.md は効いている / design ドキュ参照は未確認**
+
+→ chore-1-3 (rules 領域別分割) は **据え置き判断が妥当**。今回 11 件すべて `code-style.md` / `quality.md` の 2 ファイルで根拠が取れており、Go / njs / Markdown が混じった精度低下は観測されなかった。phase-4a は Go 単体差分なので njs 混在のテストにはなっていない。phase-4d (Lambda@Edge / njs + Go 混在) で再評価。
+
+#### 副次観測: ドッグフード 2 回が両方 `code-reviewer` 切替後
+
+PR #6 マージで agent が利用可能になったあと、PR #8 内で 2 回 `--fix` が走った。1 回目 (REV-1〜7) は CachePolicy 周辺、2 回目 (REV-1〜4) は Distribution + nginx reload + tagging stub 周辺。**両方とも軸 (1)(2)(3) で同質の指摘パターンが出ており、agent の出力は安定している** (run-to-run の揺らぎが小さい)。
+
+### 4.8 PJ 間の sync 戦略 (未決)
 
 global skill は更新したら全 PJ に効くが、project skill (review-diff / check / rules) は手動コピーになる。
 → 候補:
@@ -328,3 +369,4 @@ flowchart LR
 - 2026-04-30: nestify を一次レファレンスとして cf-local に同構成を移植。本ドキュメント作成。
 - 2026-04-30: フロー図 4 種 (lifecycle / phase-review 内部 / skill 解決 / データフロー) を追加。
 - 2026-05-01: cf-local PR #6 ドッグフードで「セッション途中追加 agent は使えない」を発見、§4.6 に追記。
+- 2026-05-02: cf-local PR #8 で `code-reviewer` agent 切替後の初回ドッグフード結果 (REV-1〜7 + REV-1〜4 の計 11 件、採用率 100%) を §4.7 に追記。chore-1-4 / phase-4a 4a-18 完了。
