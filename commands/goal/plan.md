@@ -20,8 +20,9 @@ allowed-tools: Read, Grep, Glob, Bash(git log:*), Bash(git diff:*), Write, Workf
      args: { goal, why, requirements, context, cwd: <現在の作業ディレクトリの絶対パス> }
    背景実行。task IDが返る（/workflows で進捗確認可）。このターンは一旦ここで終わる。
 3. **完了通知で再開したら**、Workflowの構造化結果（findings / critic）を回収する
-   （必要なら TaskOutput で取得）。critic.suggestedFollowups に薄い観点があれば
-   Read/Grep 等で自分で軽く補完してよい。
+   （必要なら TaskOutput で取得）。critic は視点分散の多票判定（coverage/grounding/risk）。
+   `critic.consensusComplete=false`（過半数が「不十分」）なら、`critic.missingAngles` /
+   `critic.suggestedFollowups` の薄い観点を Read/Grep 等で自分で補完してから作文に進む。
 4. **Opus自身がギャップ特定と計画作文を行う**（Workflowは調査のみ。計画と判断はClaudeが握る）:
    - findings / critic を素材に、現状とgoalのギャップを特定する
    - goal到達に必要な要素を、タスクごとに4項目で書き出す:
