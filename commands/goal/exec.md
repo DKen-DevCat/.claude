@@ -20,7 +20,7 @@ plan.md の当該タスクから、実行者向けに4項目を確定して宣�
 上記4項目を本文にした指示を組み立て、以下を実行する:
 
     mkdir -p .codex-out
-    codex exec --model gpt-5.5 --sandbox workspace-write \
+    codex exec --model gpt-5.5 -c model_reasoning_effort="xhigh" -c service_tier="priority" --sandbox workspace-write \
       -o .codex-out/<task-id>.md \
       "<4項目で構成した実行指示。対象ファイルと完了条件を明記>"
 
