@@ -1,0 +1,24 @@
+{
+  "skill_name": "dme",
+  "note": "軸b=挙動忠実度のeval。executorにSKILL.mdを適用させ、出力がv1契約通りに振る舞うかをjudgeが採点する。require=必須でtrueになるべき観点。premise_trap=前提が怪しい問題（premise_surfacedがtrue必須）。",
+  "evals": [
+    {
+      "id": "P1-normal",
+      "query": "認証まわりをリファクタしたい。いまJWTとセッションが混在してて、どう責任を分けるべきか設計から相談したい。",
+      "require": ["loop", "moat_left", "multi_hypo"],
+      "premise_trap": false
+    },
+    {
+      "id": "P2-premise",
+      "query": "アプリのstate管理、いまuseStateで散らかってるから全部Reduxに移したい。移行の設計を手伝って。",
+      "require": ["loop", "moat_left"],
+      "premise_trap": true
+    },
+    {
+      "id": "P3-deep",
+      "query": "ログ基盤を新規で作る。収集・保存・可視化・アラートをどう分けて、何から作るか、全体像から設計したい。",
+      "require": ["loop", "moat_left", "multi_hypo"],
+      "premise_trap": false
+    }
+  ]
+}
