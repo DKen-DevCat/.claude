@@ -2,7 +2,7 @@
 description: goalの実現可能性を調査し、レビュー用の計画mdを生成する（実行はしない）
 argument-hint: <goal-slug>
 model: claude-opus-4-8
-allowed-tools: Read, Grep, Glob, Bash(git log:*), Bash(git diff:*), Write, Workflow, TaskOutput, TaskGet, Task
+allowed-tools: Read, Grep, Glob, Bash(git log:*), Bash(git diff:*), Write, Workflow, TaskOutput, TaskGet, Task, Skill, AskUserQuestion
 ---
 あなたはオーケストレーターです。ultrathinkで臨んでください。
 このコマンドは**調査と計画の生成までで必ず停止**します。
@@ -14,6 +14,7 @@ allowed-tools: Read, Grep, Glob, Bash(git log:*), Bash(git diff:*), Write, Workf
 ## 手順
 1. **対話intake**: goal / なぜ / 要件 / 前提 をユーザと固める。
    Workflowは背景・非対話で実行されるため、起動前にここで入力を確定する。
+   goal が曖昧な場合は、この intake 段でも `Skill(dme)` を起動し枠組み（初期スコープ・前提）を構造化してから investigation を起動してよい。
 2. **調査Workflowを起動**（調査を多エージェント並列fan-outに委譲）:
    Workflowツールを次で呼ぶ —
      scriptPath: /Users/ooizumiyou/.claude/workflows/goal-plan-investigate.workflow.js
@@ -23,12 +24,16 @@ allowed-tools: Read, Grep, Glob, Bash(git log:*), Bash(git diff:*), Write, Workf
    （必要なら TaskOutput で取得）。critic は視点分散の多票判定（coverage/grounding/risk）。
    `critic.consensusComplete=false`（過半数が「不十分」）なら、`critic.missingAngles` /
    `critic.suggestedFollowups` の薄い観点を Read/Grep 等で自分で補完してから作文に進む。
-4. **Opus自身がギャップ特定と計画作文を行う**（Workflowは調査のみ。計画と判断はClaudeが握る）:
-   - findings / critic を素材に、現状とgoalのギャップを特定する
+4. **Opus が `Skill(dme)` を起動し、ギャップ特定と計画作文（構造判断）を dme に委譲する**（dme をコピーせず必ず Skill 経由で呼ぶ。dme は進化するため更新を自動反映させる）:
+   - findings / critic を素材に dme ループを回す。②推測を主に、①観察・③照合は findings に対して行い、現状と goal のギャップを特定する。dme は自走で構造（タスク構造・PR境界）と ⚖️moat を返す。
+   - dme 出力 → 本コマンドの出力 schema へのマッピング:
+     - dme②推測（構造・流れの仮説）→ 「## 実行計画」のタスク群 と 「## PR仕様」の PR 境界
+     - dme⚖️moat（①どこを切る / ③何を基準にズレを見る）→ 「## 未確定・要判断事項」
+     - dme③照合 → findings / critic との突き合わせ（「## 調査結果」のギャップの根拠付け）
    - goal到達に必要な要素を、タスクごとに4項目で書き出す:
      操作対象 / 操作内容 / 影響場所と効果 / goalへの影響
-5. 判断が割れる分岐は決めず「未確定・要判断事項」に選択肢として列挙する
-6. 実行計画を **PR / スコープ単位** に束ね、各 PR の **PR仕様** を設計する:
+5. dme が出した ⚖️moat（判断が割れる分岐）は決めず「未確定・要判断事項」に選択肢として直列化する。ただし goal / 要件に効く高stakesの ⚖️ は、plan.md 確定前に `AskUserQuestion` で確認してから作文する（hybrid）。
+6. 実行計画を **PR / スコープ単位** に束ねる。この PR / スコープの分割は dme の「① どこを切るか」judgment そのものであり、手順4の `Skill(dme)` ループの産物として導く（分割の根拠・代替案は ⚖️ で開示し、割れる場合は「未確定・要判断事項」へ）。各 PR の **PR仕様** を設計する:
    目的 / 満たすべき要件 / 着手前の立ち位置・完了後の立ち位置 /
    作業フロー図（mermaid）/ 解決タスクと goal への効果 /
    PR外への影響（影響範囲と影響、無ければ「なし」）/ その他共有事項。
