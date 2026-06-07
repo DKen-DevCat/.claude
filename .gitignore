@@ -17,6 +17,7 @@ projects/
 plans/
 
 # state
+.goalflow/
 todos/
 tasks/
 
