@@ -39,7 +39,8 @@ allowed-tools: Read, Grep, Glob, Bash(git log:*), Bash(git diff:*), Write, Workf
 6. 実行計画を **PR / スコープ単位** に束ねる。この PR / スコープの分割は dme の「① どこを切るか」judgment そのものであり、手順4の `Skill(dme)` ループの産物として導く。分割候補が複数ある場合は手順4と同じペア比較トーナメントを回し、実行級の比較では champion を採用する。基準級の分岐では champion を強制せず、分割の根拠・代替案とともに ⚖️ で開示し、「未確定・要判断事項」へ直列化する。各 PR の **PR仕様** を設計する:
    目的 / 満たすべき要件 / 着手前の立ち位置・完了後の立ち位置 /
    作業フロー図（mermaid）/ 解決タスクと goal への効果 /
-   PR外への影響（影響範囲と影響、無ければ「なし」）/ その他共有事項。
+   PR外への影響（影響範囲と影響、無ければ「なし」）/
+   Verification（検証コマンド。build/test。共通の build/test が無い repo では「なし（または手レビュー）」と明記可）/ その他共有事項。
    この PR仕様は /goal:exec が PR 本文を書く際の唯一の根拠になるため、plan 段階で確定させる。
 
 ## 出力
@@ -67,6 +68,7 @@ allowed-tools: Read, Grep, Glob, Bash(git log:*), Bash(git diff:*), Write, Workf
     ```
   - 解決タスクと goal への効果: 本PR内で解決する実行計画タスクと、PR goal への効果
   - PR外への影響: 影響範囲と影響（無ければ「なし」）
+  - Verification: 検証コマンド（build/test）。無ければ /goal:exec は停止する。共通の build/test が無い repo では「なし（または手レビュー）」と明記可。
   - その他共有事項:
 
 最後に「plan.md を確認・編集のうえ /goal:exec を実行してください」と伝えて停止する。
