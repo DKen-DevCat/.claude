@@ -14,6 +14,12 @@ allowed-tools: Read, Grep, Glob, Write, Edit, Bash(git diff:*), Bash(git status:
 ## 各タスクについて、順に以下を実行
 ただし、(a) で target と Tier を確定した後、独立バッチ判定に該当する Tier B/C タスクだけは (b)/(c) をバッチとして並列化する。依存あり/Tier A は引き続き順に実行する。
 
+全体進行は loop-until-done とする。全 plan タスクが「独立バッチなら branch-merge バリアで `merged` になったうえで統合チェックを通過し、ledger の状態が `integrationOk` または `cleaned`」「直列タスクなら実態検証通過」になるまで主 loop を回す。直列タスクは従来どおり (a)→(b)→(c) で進め、独立バッチは task-6/7 の独立バッチ判定と branch-merge バリアで進める。
+
+主 loop 内で生じた実行級の質問（既定判断で進めて注記できるもの）は質問 queue に溜め、主 loop の終了後に一括提示する。即停止する hard-stop は「goal/要件に効く分岐」と「外向き操作（外向き merge / PR 作成 / branch 削除 / push 済み履歴の改変）」だけとし、これらは質問 queue に回さず、その場で選択肢を提示して停止する。
+
+主 loop には必ず有限の終了保証を置く。task 単位の `maxAttempts`、batch 単位の `maxRounds` を実行開始時に宣言し、plan.md に指定が無ければ `maxAttempts=3` / `maxRounds=3` を使う。各 attempt では verdict signature（判定種別と主因）と diff signature（当該タスクの対象ファイルに絞った diff の同一性）を記録し、直前 attempt と同一署名が連続した場合は no-progress とみなして打ち切る。打ち切ったタスクは「未解決」として質問 queue に入れ、回答後に未解決タスクだけ主 loop へ戻す。トークン予算上限は設けず、終了は `maxAttempts` / `maxRounds` / no-progress signature によって保証する。
+
 ### (a) 実行前指示の明確化
 plan.md の当該タスクから、実行者向けに4項目を確定して宣言する:
 - 操作対象 / 操作内容 / 影響場所と効果 / goalへの影響
@@ -69,10 +75,10 @@ Tier A:
 - 検証Workflowは read-only の逆検証のみ。編集はしない（編集は常にcodex）。
 
 Tier B:
-   軽ゲートとして plan.md の Verification に記載された test/build を実行し、Opus自身が `git diff` と対象ファイルを読んで採否を決める。Verification が無い、または Verification のコマンドが allowed-tools 許可外なら停止して人間へ返す。
+   軽ゲートとして plan.md の Verification に記載された test/build を実行し、Opus自身が `git diff` と対象ファイルを読んで採否を決める。Verification が無い、または Verification のコマンドが allowed-tools 許可外なら当該タスクを未解決として質問 queue に入れ、主 loop は他タスクへ進める。ただし goal/要件に効く分岐なら中断条件に従い即停止する。
 
 Tier C:
-   信頼 + Verification + branch-merge バリアの統合チェックのみを行い、Opus自身が `git diff` と対象ファイルを読んで採否を決める。branch-merge バリアは task-7 で導入済みの場合に使い、未導入なら作成せず dormant として扱う。Verification が無い、または Verification のコマンドが allowed-tools 許可外なら停止して人間へ返す。
+   信頼 + Verification + branch-merge バリアの統合チェックのみを行い、Opus自身が `git diff` と対象ファイルを読んで採否を決める。branch-merge バリアは task-7 で導入済みの場合に使い、未導入なら作成せず dormant として扱う。Verification が無い、または Verification のコマンドが allowed-tools 許可外なら当該タスクを未解決として質問 queue に入れ、主 loop は他タスクへ進める。ただし goal/要件に効く分岐なら中断条件に従い即停止する。
 
 独立バッチ内のタスクは、各 worktree の commit 済み branch について base SHA から branch SHA までの**当該タスクの対象ファイルに絞った** diff を取得し、既存の goal-exec-verify workflow を並列に起動して検証する。Workflowツールの `cwd` は対象 worktree の絶対パス、`diffText` は当該 worktree の当該タスク分だけにスコープした diff、`targets` は当該タスクの target ファイル集合にする。検証Workflowは read-only の逆検証のみで、編集はしない。Tier B/C の Verification と Opus自身による `git diff` / 対象ファイル確認は引き続き行い、採用できると判断したタスクだけ ledger の状態を `verified` にする。検証不合格、Workflow失敗、Verification失敗、SHA不一致、対象外変更の混入は当該タスクを `failed` にする。
 
@@ -89,7 +95,7 @@ task-6 で `verified` になった独立バッチの branch は、Opus が base 
 
 resume 時は ledger と base branch を SHA で照合する。`merged` だが `integrationOk` ではないエントリは「merge 後・統合チェック前に中断した」ものとして扱い、merge SHA が現在の base 先端または履歴上にあることを確認してから統合チェックを再実行し、通れば `integrationOk` → `cleaned` へ進める。`created` / `running` / `committed` / `verified` 止まりの未完 worktree は破棄して作り直し、ledger の SHA 記録と実際の branch/worktree の SHA が一致しない場合は自走せず人間に返す。
 
-push 前の local な merge / revert / rollback は自走対象とする。`git reset` を使う場合も、push 済み履歴には触れないことを条件に local な rollback 境界内でのみ使う。push 済み履歴の改変、外向き merge、PR merge、branch 削除は task-8 で扱う hard-stop であり、正本の「履歴改変は事前確認」と整合させて、ここでは自走しない。
+push 前の local な merge / revert / rollback は自走対象とする。task-7 の local integration merge（push 前）はこの自走対象に含み、即停止対象ではない。`git reset` を使う場合も、push 済み履歴には触れないことを条件に local な rollback 境界内でのみ使う。push 済み履歴の改変、外向き merge、PR merge、branch 削除は task-8 で扱う hard-stop であり、正本の「履歴改変は事前確認」と整合させて、ここでは自走しない。
 
 差し戻し（各 attempt）は task-id / タスク種別 / Tier ごとに集計する。差し戻しは verdicts と `.codex-out` に既に記録されるため新規計測は不要で、loop 完了後に集計のみ行う。集計が「この種別は N attempt 連続で差し戻し0 → 格下げ可」を示す場合、報告質問として人間に返す。人間が承認した Tier 格下げは対象repoの `.claude/tier-policy.md` に永続化し、次回 goal の Tier 判定の初期値に使う。
 
@@ -109,5 +115,6 @@ plan.md に PR仕様が無い場合は、上記項目を満たす本文を plan 
 検証Workflowが利用不可/失敗した場合は、従来どおりClaude自身が `git diff` と対象ファイルを読んでplan設計と照合する。判定基準・差し戻し手順は不変。
 
 ## 中断条件
-goalや要件に影響する想定外が発生したら、勝手に進めずユーザへ選択肢を提示して停止する。
-plan.md に Verification が無い、または Verification のコマンドが allowed-tools 許可外の場合は、exec を停止して人間に返す。
+hard-stop は、goalや要件に効く分岐が発生した場合、および外向き操作（外向き merge / PR 作成 / branch 削除 / push 済み履歴の改変）が必要になった場合に限る。この場合は質問 queue に回さず、勝手に進めずユーザへ選択肢を提示して停止する。
+task-7 の local integration merge（push 前）は自走対象であり、hard-stop ではない。
+plan.md に Verification が無い、または Verification のコマンドが allowed-tools 許可外の場合は、当該タスクを未解決として質問 queue に入れ、主 loop 終了後に一括で人間に返す。ただし、その判断が goalや要件に効く分岐に当たる場合は hard-stop として即停止する。
