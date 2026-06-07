@@ -78,6 +78,19 @@ Tier C:
 
 独立バッチの全タスクが `verified` または `failed` に確定したら、`verified` のタスクだけを task-7 の branch-merge バリアへ渡す。ここでは `aboutToMerge` 以降へ進めるための前方参照に留め、merge / 統合チェック / rollback / cleanup / resume の具体手順は task-7 側で扱う。
 
+### branch-merge バリア（独立バッチの再シリアライズ）
+task-6 で `verified` になった独立バッチの branch は、Opus が base branch 上で**1つずつ**取り込む。並列で作った変更の安全性は隔離された単体検証だけでは保証せず、このバリアでの統合再チェックに依存させる。統合チェックが cross-task の相互作用を捕まえた場合は、次回以降の独立バッチ判定を厳格化する。
+
+取り込み前に ledger の当該エントリについて base SHA / branch SHA / 現在の branch 先端を照合し、対象が `verified` であることを確認する。取り込みを開始する直前に状態を `aboutToMerge` にし、base branch へ `git merge --no-ff <branch>` で merge して各タスクを履歴に残す。merge が成功したら merge 後の base 先端 SHA を merge SHA として ledger に記録し、状態を `merged` にする。
+
+各 merge 後、plan.md の Verification に記載された build/test を base branch 上で統合チェックとして実行する。通った場合は状態を `integrationOk` にし、当該 worktree を `git worktree remove <worktree path>` で cleanup して状態を `cleaned` にする。ここで行う cleanup は worktree の削除までとし、branch 削除は task-8 の hard-stop 対象なので自走しない。
+
+独立のはずのタスクで merge conflict が出た場合は、独立判定が誤りだったとみなす。merge を中止し、当該 branch を独立バッチから捨て、ledger を `rolledBack` にして、そのタスクを直列バッチへ回す。統合チェックが失敗した場合は当該 merge を rollback し、ledger を `rolledBack` にして、当該タスクを (b) へ差し戻す。rollback 後は次の `verified` branch に進む前に base branch の SHA が rollback 後の想定 SHA と一致していることを確認する。
+
+resume 時は ledger と base branch を SHA で照合する。`merged` だが `integrationOk` ではないエントリは「merge 後・統合チェック前に中断した」ものとして扱い、merge SHA が現在の base 先端または履歴上にあることを確認してから統合チェックを再実行し、通れば `integrationOk` → `cleaned` へ進める。`created` / `running` / `committed` / `verified` 止まりの未完 worktree は破棄して作り直し、ledger の SHA 記録と実際の branch/worktree の SHA が一致しない場合は自走せず人間に返す。
+
+push 前の local な merge / revert / rollback は自走対象とする。`git reset` を使う場合も、push 済み履歴には触れないことを条件に local な rollback 境界内でのみ使う。push 済み履歴の改変、外向き merge、PR merge、branch 削除は task-8 で扱う hard-stop であり、正本の「履歴改変は事前確認」と整合させて、ここでは自走しない。
+
 差し戻し（各 attempt）は task-id / タスク種別 / Tier ごとに集計する。差し戻しは verdicts と `.codex-out` に既に記録されるため新規計測は不要で、loop 完了後に集計のみ行う。集計が「この種別は N attempt 連続で差し戻し0 → 格下げ可」を示す場合、報告質問として人間に返す。人間が承認した Tier 格下げは対象repoの `.claude/tier-policy.md` に永続化し、次回 goal の Tier 判定の初期値に使う。
 
 ## PR 作成
