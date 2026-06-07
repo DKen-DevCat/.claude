@@ -2,7 +2,7 @@
 description: 承認済みplan.mdを唯一の真実として、codex(gpt-5.5)で実行しClaudeが実態検証する
 argument-hint: docs/plans/<goal-slug>.md
 model: claude-opus-4-8
-allowed-tools: Read, Grep, Glob, Write, Edit, Bash(git diff:*), Bash(git status:*), Bash(codex exec:*), Bash(mkdir:*), Workflow, TaskOutput, TaskGet
+allowed-tools: Read, Grep, Glob, Write, Edit, Bash(git diff:*), Bash(git status:*), Bash(git worktree:*), Bash(git branch:*), Bash(git switch:*), Bash(git checkout:*), Bash(git add:*), Bash(git commit:*), Bash(git merge:*), Bash(git revert:*), Bash(git reset:*), Bash(git rev-parse:*), Bash(git log:*), Bash(git show:*), Bash(codex exec:*), Bash(mkdir:*), Bash(rm:*), Bash(node:*), Workflow, TaskOutput, TaskGet
 ---
 あなたはオーケストレーター兼検証者です。ultrathinkで臨んでください。
 **自分でプロダクションコードを編集してはいけません。** 編集はすべて codex(gpt-5.5)に委譲します。
