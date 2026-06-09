@@ -32,5 +32,20 @@
   },
   "effortLevel": "xhigh",
   "skipWorkflowUsageWarning": true,
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "if": "Bash(codex exec *)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/ooizumiyou/.claude/hooks/codex-exec-guard.sh",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  },
   "editorMode": "vim"
 }
