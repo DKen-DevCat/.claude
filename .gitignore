@@ -14,11 +14,13 @@ session-env/
 history.jsonl
 sessions/
 projects/
-plans/
+/plans/
 
 # state
 todos/
 tasks/
+.goalflow/
+.codex-out/
 
 # telemetry / auth
 statsig/
