@@ -6,7 +6,7 @@ export const meta = {
   ],
 }
 
-// args: { taskId, targets:[paths], planExcerpt, diffText, codexSummary, cwd }
+// args: { taskId, targets:[paths], planExcerpt, diffText, codexSummary, cwd, baseCommit }
 // Workflowランタイムは args をJSON文字列で渡す場合があるため防御的にパースする
 let a = args || {}
 if (typeof a === 'string') {
@@ -15,9 +15,18 @@ if (typeof a === 'string') {
 const taskId = a.taskId || 'task'
 const targets = Array.isArray(a.targets) ? a.targets : []
 const planExcerpt = a.planExcerpt || ''
-const diffText = a.diffText || '(diff未提供。対象ファイルをReadして実態で判定せよ)'
+const diffText = a.diffText || '(diff未提供。対象ファイルと plan 設計の整合のみ見よ。pre-existing/未コミット差分を副作用と見なすな)'
 const codexSummary = a.codexSummary || ''
 const cwd = a.cwd || '.'
+const baseCommit = a.baseCommit || ''
+const lockdown =
+  'あなたは git を自前実行してはならない（git diff/status/log/show/--name-only を自分で叩くな）。' +
+  '当該 task の差分の根拠は、上で渡された diffText のみ。自分で baseline を選ぶな。' +
+  'diffText に含まれない変更を副作用と判定するな。' +
+  'pre-existing/未コミット差分（タスク前から存在する変更）は当該 task の副作用ではない。'
+const baselineNote = baseCommit
+  ? `当該 task の baseline は baseCommit=${baseCommit}。diffText は git diff baseCommit..HEAD のスコープ済み差分であり、これが当該 task の真の差分である。`
+  : ''
 
 const LENSES = [
   {
@@ -30,7 +39,8 @@ const LENSES = [
     key: 'side-effects',
     focus:
       'planに無い副作用・巻き込み変更・想定外の差分が無いか。' +
-      '保存対象や無関係ファイルが変わっていないか。',
+      '保存対象や無関係ファイルが変わっていないか。' +
+      'pre-existing/未コミット差分は副作用ではない。diffText に現れた変更のみを評価対象とせよ。',
   },
   {
     key: 'completion',
@@ -72,6 +82,8 @@ const verdicts = (await parallel(
     agent(
       `あなたは /goal:exec の検証担当です。read-only。codexの自己申告を信じず、実ファイルとdiffで判定する。\n` +
         `作業ルート: ${cwd}\n対象ファイル: ${targets.join(', ') || '(指定なし)'}\n\n` +
+        `${lockdown}\n` +
+        `${baselineNote ? `${baselineNote}\n` : ''}\n` +
         `plan設計(抜粋):\n${planExcerpt}\n\n` +
         `git diff:\n${diffText}\n\n` +
         `codex報告(参考のみ):\n${codexSummary}\n\n` +
