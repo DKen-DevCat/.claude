@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# codex exec を wall-clock 有界化する PreToolUse hook。macOS に timeout/gtimeout が無いため perl ラッパーで rewrite。非該当・エラー時は fail-open。詳細: ~/.claude/docs/plans/goal-exec-codex-large-task-hang.md
+# codex exec を wall-clock 有界化する PreToolUse hook。timeout/gtimeout ladder を使い、macOS に timeout/gtimeout が無い場合は perl ラッパーへフォールバックして rewrite。非該当・エラー時は fail-open。詳細: ~/.claude/docs/plans/goal-exec-codex-large-task-hang.md
 
 input="$(cat)"
 
@@ -29,14 +29,20 @@ case "$trimmed" in
 esac
 
 case "$command" in
-  "perl -e "*)
+  "timeout "*|"gtimeout "*|"perl -e "*)
     exit 0
     ;;
 esac
 
 perl_wrap='my $t=shift@ARGV;my $p=fork;if(!defined$p){exit 127}if(!$p){exec@ARGV;exit 127}$SIG{ALRM}=sub{kill 15,$p;sleep 2;kill 9,$p;exit 124};alarm $t;waitpid($p,0);exit($?>>8)'
-new_command="perl -e '$perl_wrap' 300 $command"
-ladder='codex exec is wall-clock-bounded to 300s by codex-exec-guard. On exit 124 (timeout) or suspected rate-limit (TPM/RPM) exhaustion, DEGRADE before retry: (1) lower model_reasoning_effort xhigh->high->medium, (2) split into 2-3 files, (3) drop -c service_tier="priority", (4) last resort Opus-direct for mechanical no-logic edits. Root cause: xhigh reserves huge tokens; cumulative throttle -> 429 -> silent backoff.'
+if command -v timeout >/dev/null 2>&1; then
+  new_command="timeout 300 $command"
+elif command -v gtimeout >/dev/null 2>&1; then
+  new_command="gtimeout 300 $command"
+else
+  new_command="perl -e '$perl_wrap' 300 $command"
+fi
+ladder='codex exec is wall-clock-bounded to 300s by codex-exec-guard using timeout/gtimeout when available, otherwise the perl SIGTERM/SIGKILL fallback. On exit 124 (timeout) or suspected rate-limit (TPM/RPM) exhaustion, DEGRADE before retry: (1) lower model_reasoning_effort xhigh->high->medium, (2) split into 2-3 files, (3) drop -c service_tier="priority", (4) last resort Opus-direct for mechanical no-logic edits. Root cause: xhigh reserves huge tokens; cumulative throttle -> 429 -> silent backoff.'
 
 printf '%s' "$input" | /usr/bin/jq --arg cmd "$new_command" --arg ctx "$ladder" \
   '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"allow",updatedInput:(.tool_input + {command:$cmd}),additionalContext:$ctx}}' 2>/dev/null
