@@ -138,7 +138,19 @@ const CRITIC_SCHEMA = {
 
 const uniq = (xs) => Array.from(new Set(xs))
 const CRITIC_SEVERITIES = ['low', 'medium', 'high']
+const CRITIC_SEVERITY_RANK = { low: 0, medium: 1, high: 2 }
 const DEFAULT_MISSING_ANGLE_SEVERITY = 'medium'
+
+const normalizeMissingAngleKey = (angle) => {
+  if (typeof angle !== 'string') return ''
+
+  return angle
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase()
+    .replace(/[.,;:!?、。．，；：！？]+$/g, '')
+    .trim()
+}
 
 const normalizeMissingAngle = (item) => {
   if (item && typeof item === 'object') {
@@ -168,7 +180,36 @@ const normalizedMissingAngles = (critic) => {
   return items.map(normalizeMissingAngle).filter(Boolean)
 }
 
+const dedupeMissingAngles = (missingAngles) => {
+  const byKey = new Map()
+
+  for (const gap of missingAngles) {
+    const normalized = normalizeMissingAngle(gap)
+    if (!normalized) continue
+
+    const key = normalizeMissingAngleKey(normalized.angle)
+    if (!key) continue
+
+    const existing = byKey.get(key)
+    if (!existing) {
+      byKey.set(key, { angle: normalized.angle, severity: normalized.severity })
+      continue
+    }
+
+    if (CRITIC_SEVERITY_RANK[normalized.severity] > CRITIC_SEVERITY_RANK[existing.severity]) {
+      existing.severity = normalized.severity
+    }
+  }
+
+  return Array.from(byKey.values())
+}
+
 const formatMissingAngle = (gap) => `[${gap.severity}] ${gap.angle}`
+
+const formatPromptList = (items) => {
+  if (!Array.isArray(items) || !items.length) return '- (none)'
+  return items.map((item) => `- ${item}`).join('\n')
+}
 
 const MAX_ROUNDS = 3
 const STALLED_ROUNDS_LIMIT = 2
@@ -218,18 +259,19 @@ const missingAngleGroups = (missingAngles) => {
 }
 
 const aggregateCritic = (critics) => {
-  const gapsByLens = critics.map(normalizedMissingAngles)
+  const gapsByLens = critics.map((critic) => dedupeMissingAngles(normalizedMissingAngles(critic)))
   const highGapsByLens = gapsByLens.map((gaps) => gaps.filter((gap) => gap.severity === 'high'))
-  const unresolvedHighGaps = uniq(highGapsByLens.flatMap((gaps) => gaps.map((gap) => gap.angle)))
+  const missingAngles = dedupeMissingAngles(gapsByLens.flat())
+  const unresolvedHighGaps = dedupeMissingAngles(highGapsByLens.flat()).map((gap) => gap.angle)
   const sufficientVotes = highGapsByLens.filter((gaps) => !gaps.length).length
-  const consensusComplete = unresolvedHighGaps.length === 0
+  const consensusComplete = highGapsByLens.every((gaps) => gaps.length === 0)
 
-  // plan.md が読む3配列は各レンズの集約として後方互換に保つ（文字列レベルで重複排除）
+  // plan.md が読む3配列は各レンズの集約として後方互換に保つ（意味的に重複排除）
   return {
     consensusComplete,
     sufficientVotes,
     totalLenses: CRITIC_LENSES.length,
-    missingAngles: uniq(gapsByLens.flatMap((gaps) => gaps.map(formatMissingAngle))),
+    missingAngles: missingAngles.map(formatMissingAngle),
     unresolvedHighGaps,
     unverifiedClaims: uniq(critics.flatMap((c) => c.unverifiedClaims || [])),
     suggestedFollowups: uniq(critics.flatMap((c) => c.suggestedFollowups || [])),
@@ -237,8 +279,22 @@ const aggregateCritic = (critics) => {
   }
 }
 
-const runCriticRound = async (roundNumber) => {
+const runCriticRound = async (roundNumber, findingsDelta, unresolvedHighGaps = []) => {
   log(`critic round ${roundNumber}: ${CRITIC_LENSES.length} adversarial lenses (multi-vote)`)
+  const findingsContextLabel = roundNumber === 1
+    ? '調査結果(JSON)'
+    : '直前に新規追加された findings 差分(JSON)'
+  const findingsContext = Array.isArray(findingsDelta) ? findingsDelta : []
+  const settledGapCarry = roundNumber === 1
+    ? ''
+    : `現在未解決の high gap リスト:\n${formatPromptList(unresolvedHighGaps)}\n\n` +
+      `このroundでは以下の未解決 high gap に新情報があるかだけを評価せよ。` +
+      `既出の gap を別表現で再生成するな。` +
+      `未解決のままなら上の文言をそのまま high として残し、解消されたものは再掲しない。\n\n`
+  const missingAngleInstruction = roundNumber === 1
+    ? `抜けは全て severity 付きで提案せよ（列挙は敵対的に厳しく）。`
+    : `missingAngles は現在未解決の high gap についてのみ返せ。` +
+      `low/medium の新規列挙や既出 gap の言い換えは出さない。`
 
   const critics = (await parallel(
     CRITIC_LENSES.map((L) => () =>
@@ -249,10 +305,11 @@ const runCriticRound = async (roundNumber) => {
           `goal: ${goal}\nなぜ: ${why}\n要件: ${requirements}\n前提: ${ctx}\n\n` +
           `担当レンズ[${L.key}]: ${L.focus}\n` +
           `他レンズと重複せず自分の観点に集中せよ。` +
-          `抜けは全て severity 付きで提案せよ（列挙は敵対的に厳しく）。` +
+          missingAngleInstruction +
           `high はこの抜けを埋めずに plan を書くと plan が誤る/危険になるものに限る。` +
           `十分かどうかは判定しない（それは人間が確定する）。\n\n` +
-          `調査結果(JSON):\n${JSON.stringify(findings, null, 2)}\n\n` +
+          settledGapCarry +
+          `${findingsContextLabel}:\n${JSON.stringify(findingsContext, null, 2)}\n\n` +
           `schemaに従って構造化提案を返せ。`,
         { label: `critic:r${roundNumber}:${L.key}`, phase: 'Critic', model: 'sonnet', schema: CRITIC_SCHEMA }
       )
@@ -270,7 +327,8 @@ const runCriticRound = async (roundNumber) => {
   return aggregated
 }
 
-let critic = await runCriticRound(1)
+let newFindingsThisRound = findings.slice()
+let critic = await runCriticRound(1, newFindingsThisRound)
 log(
   `consensus round 1: initial probes=${probes.length}, ` +
     `findings=${findings.length}, consensus=${critic.consensusComplete ? 'complete' : 'INCOMPLETE'}`
@@ -294,7 +352,9 @@ let stalledRounds = 0
 while (!critic.consensusComplete && roundNumber < MAX_ROUNDS) {
   const nextRound = roundNumber + 1
   const previousHighGapCount = critic.unresolvedHighGaps.length
-  const groups = missingAngleGroups(critic.unresolvedHighGaps)
+  const unresolvedHighGaps = critic.unresolvedHighGaps
+  const previousRoundNewFindings = newFindingsThisRound.slice()
+  const groups = missingAngleGroups(unresolvedHighGaps)
 
   log(
     `consensus round ${nextRound}: ` +
@@ -321,9 +381,13 @@ while (!critic.consensusComplete && roundNumber < MAX_ROUNDS) {
               `goal: ${goal}\nなぜ: ${why}\n要件: ${requirements}\n前提: ${ctx}\n\n` +
               `直前criticで high severity と提案された missingAngles を再probeする。` +
               `low/medium は収束を妨げないため、このroundでは high を優先する。\n` +
+              `現在未解決の high gap リスト:\n${formatPromptList(unresolvedHighGaps)}\n\n` +
+              `既存findingsは直前roundで新規追加された差分のみを参照する。` +
+              `累積findings全体は再注入されないため、以下の差分と未解決 high gap だけを根拠に追加調査する。\n` +
               `担当highSeverityMissingAngles[round ${nextRound} #${index + 1}]:\n` +
               `${angles.map((angle) => `- ${angle}`).join('\n')}\n\n` +
-              `既存findings(JSON):\n${JSON.stringify(findings, null, 2)}\n\n` +
+              `直前roundで新規追加された findings 差分(JSON):\n` +
+              `${JSON.stringify(previousRoundNewFindings, null, 2)}\n\n` +
               `side は主対象に応じて goal-reality または current-reality を選ぶ。` +
               `Read/Grep/Glob で実態を確認し、schemaに従って構造化して返せ。`,
             {
@@ -339,12 +403,13 @@ while (!critic.consensusComplete && roundNumber < MAX_ROUNDS) {
     : []
 
   for (const finding of followupFindings) findings.push(finding)
+  newFindingsThisRound = followupFindings
 
   const newFindings = findings.length - beforeFindingCount
   log(`consensus round ${nextRound}: findings added=${newFindings}, total findings=${findings.length}`)
 
   phase('Critic')
-  critic = await runCriticRound(nextRound)
+  critic = await runCriticRound(nextRound, newFindingsThisRound, unresolvedHighGaps)
 
   const highGapsShrank = critic.unresolvedHighGaps.length < previousHighGapCount
   const madeProgress = newFindings > 0 && highGapsShrank
