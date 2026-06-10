@@ -13,6 +13,8 @@ allowed-tools: Read, Grep, Glob, Write, Edit, Bash(git diff:*), Bash(git status:
 ## 1. 唯一の真実
 @$ARGUMENTS ← このplan.mdの内容だけが正。記載外の実装・リファクタ・追加調査・仕様変更はしない。
 
+**tasks.json による安定タスクID（任意・後方互換）**: `$ARGUMENTS` の `.md` を `.tasks.json` に置換したパス（`docs/plans/<slug>.tasks.json`）が存在すれば `Read` し、その `tasks[].id` を当該タスクの **canonical task-id** として使う。すなわち codex 呼び出しの `-o .codex-out/<id>.md`・branch `goalflow/<run-id>/<id>`・検証 Workflow の `args.taskId` に、tasks.json と同じ `id` を貫通させる。スキーマは `docs/viz/SCHEMA.md` の tasks.json 定義に従う。**tasks.json が不在のときは従来どおり plan.md 散文の `- [ ] task-N` から task-id を導出する（fallback。挙動は不変）**。これは可視化（taskflow-live-visualizer）の fusion 層が 3 観測 seam（.codex-out / git commit / verify journal）を `id` で突合するための最小協力であり、tasks.json を読む以外の実行挙動は変えない。run-id の決定論生成は本バージョンでは追加しない（mtime ベースの run-window で代替）。
+
 ## 2. permission / security ポリシー（最重要・ユーザ確定）
 - **worktree 操作は全許可**（`git worktree add` / `remove` 含む）。
 - **git 履歴改変は一律禁止＝使わない**: `git reset --hard` / `git branch -D` / force push / rebase / `commit --amend`。これらは `settings.json` の deny でも一律拒否される前提（多層防御）。
