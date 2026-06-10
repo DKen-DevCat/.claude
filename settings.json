@@ -18,25 +18,21 @@
       "Bash(git push -f *)",
       "Bash(git reset --hard *)",
       "Bash(git branch -D *)",
-      "Bash(git clean -f*)"
+      "Bash(git clean -f*)",
+      "Bash(git rebase *)",
+      "Bash(git commit --amend*)"
     ],
+    "defaultMode": "acceptEdits",
     "additionalDirectories": [
       "/Users/ooizumiyou/nestify",
       "/Users/ooizumiyou/nestify-ide"
-    ],
-    "defaultMode": "acceptEdits"
+    ]
   },
-  "enabledPlugins": {
-    "typescript-lsp@claude-plugins-official": true,
-    "gopls-lsp@claude-plugins-official": true
-  },
-  "effortLevel": "xhigh",
-  "skipWorkflowUsageWarning": true,
+  "model": "claude-fable-5[1m]",
   "hooks": {
     "PreToolUse": [
       {
         "matcher": "Bash",
-        "if": "Bash(codex exec *)",
         "hooks": [
           {
             "type": "command",
@@ -47,5 +43,11 @@
       }
     ]
   },
+  "enabledPlugins": {
+    "typescript-lsp@claude-plugins-official": true,
+    "gopls-lsp@claude-plugins-official": true
+  },
+  "effortLevel": "xhigh",
+  "skipWorkflowUsageWarning": true,
   "editorMode": "vim"
 }
