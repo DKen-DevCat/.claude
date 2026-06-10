@@ -76,6 +76,19 @@ allowed-tools: Read, Grep, Glob, Bash(git log:*), Bash(git diff:*), Write, Workf
   - Verification: 検証コマンド（build/test）。無ければ /goal:exec は停止する。共通の build/test が無い repo では「なし（または手レビュー）」と明記可。
   - その他共有事項:
 
+### tasks.json 追加出力（可視化の公開API・`docs/viz/SCHEMA.md` 準拠）
+
+`docs/plans/$ARGUMENTS.md` を書き出すのと同時に、実行計画のタスク群を機械可読な DAG として `docs/plans/$ARGUMENTS.tasks.json` にも Write する（**追加出力のみ。`.md` の構造・内容は一切変えない**）。スキーマは `docs/viz/SCHEMA.md` の tasks.json 定義に厳密に従う:
+
+- `tasks[].id` = 実行計画の `- [ ] task-N` の `task-N` と完全一致（安定ID。exec-v4 が `-o`/branch/verify に貫通させる canonical id）。
+- `tasks[].label` = タスクの短い名前。`tasks[].targets` = 当該タスクの「操作対象」ファイルの相対パス配列。
+- `tasks[].deps` = 当該タスクが依存する他タスクの `id` 配列（PR/スコープ設計と実行順から導出。独立なら `[]`）。
+- `tasks[].tier` = exec-v4 §5 の Tier 判定（`A`|`B`|`C`。判断材料が無ければ `A`）。`tasks[].lane` = v1 は `null`（直列）。
+- `edges` = `deps` から導出する冗長表現（task B が `deps:[A]` なら `{from:A, to:B}`）。
+- `planSlug` = `$ARGUMENTS` の slug、`generatedAt` = 生成時刻（ISO8601）。
+
+出力後の停止条件と `.md` の扱いは不変（`tasks.json` は任意の追加成果物で、可視化スキルが消費する。exec-v4 は不在時 散文から fallback）。
+
 最後に「plan.md を確認・編集のうえ /goal:exec を実行してください」と伝えて停止する。
 
 ## フォールバック

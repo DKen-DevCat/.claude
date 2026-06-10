@@ -29,7 +29,7 @@ Claude（orchestrator・Fable 5）は、設計・レビュー・検証の最終�
 1 タスク = 1 Codex 呼び出しとする。各タスク後に、対象ファイルに絞った `git diff` と実ファイルを読み、plan の設計4項目と照合する実態検証ゲートを必ず通す。
 
 ### codex 呼び出しの堅牢化（PreToolUse hook）【v3/v4 移行期間のみ・v5 では不要】
-**v5（`/goal:exec-v5`）は codex を使わないため、この hook は v5 経路には無関係**（fresh subagent は harness 管理で hang のクラスが消える）。v3/v4 が codex exec を使う移行期間中のみ本 hook は有効で、**hook の物理撤去は codex 解約と同期する**（撤去しても v5 の Bash 経路は fail-open で素通りするため実害なし）。以下は v3/v4 向けの説明: codex exec は、グローバル PreToolUse hook `~/.claude/hooks/codex-exec-guard.sh`（`~/.claude/settings.json` に登録）により実行直前に **wall-clock 有界化** される。macOS に `timeout`/`gtimeout` が無いため `perl` ラッパー（`hookSpecificOutput.updatedInput` で command を rewrite）で既定 300s に bound する。hang/timeout（exit 124）や rate-limit（TPM/RPM 枯渇）が疑われる時は、hook が `additionalContext` で注入する degrade ladder（reasoning effort xhigh→high→medium / 2〜3 ファイルにチャンク / `service_tier="priority"` 除去 / 最終手段 Opus 直接）に従う。実測の切り分けは memory `feedback_codex_ratelimit_hang` を参照。
+**v5（`/goal:exec-v5`）は codex を使わないため、この hook は v5 経路には無関係**（fresh subagent は harness 管理で hang のクラスが消える）。v3/v4 が codex exec を使う移行期間中のみ本 hook は有効で、**hook の物理撤去は codex 解約と同期する**（撤去しても v5 の Bash 経路は fail-open で素通りするため実害なし）。以下は v3/v4 向けの説明: codex exec は、グローバル PreToolUse hook `~/.claude/hooks/codex-exec-guard.sh`（`~/.claude/settings.json` に登録）により実行直前に **wall-clock 有界化** される。GNU `timeout`/`gtimeout` を優先し（coreutils 導入済み）、実行環境に `timeout`/`gtimeout` が無い場合のみ `perl` fork/alarm ラッパーにフォールバックして、`hookSpecificOutput.updatedInput` で command を rewrite し既定 300s に bound する。hang/timeout（exit 124）や rate-limit（TPM/RPM 枯渇）が疑われる時は、hook が `additionalContext` で注入する degrade ladder（reasoning effort xhigh→high→medium / 2〜3 ファイルにチャンク / `service_tier="priority"` 除去 / 最終手段 Opus 直接）に従う。これにより `exec.md` を無編集のまま、全 session で codex の無限 hang を有界 fail-fast に置換する。根因・設計は `~/.claude/docs/plans/goal-exec-codex-large-task-hang.md`、実測の切り分けは memory `feedback_codex_ratelimit_hang` を参照。
 
 ## v4 exec 制御（2トラック）
 
@@ -51,6 +51,8 @@ exec は v3 の単一タスク (a)明確化 →(b)Codex →(c)検証 を基盤�
 `/goal:exec-v4`: `~/.claude/commands/goal/exec-v4.md`。v3 を基盤に v4 制御（2トラック・Tier 勾配・独立バッチ worktree 並列・branch-merge バリア・loop-until-done・commit-before-verify・コスト計測）を載せた controller。`/loop` から自走起動する想定。`exec.md`(v3) は不変。
 
 `/goal:exec-v5`: `~/.claude/commands/goal/exec-v5.md`。承認済み plan.md を唯一の真実として、**Claude 一本化（codex 全廃・1タスク=1 fresh subagent）**で実装し、orchestrator(Fable 5) が実態検証する controller。v4 §1-13 制御を内包し、実装層だけを Codex から `Agent`(fresh subagent) に差し替え、`/loop` 自走で **draft PR 作成まで無人終端**する。codex を使わないため harness が完了通知を保証し、ハングのクラスが消える。ledger（`.goalflow/state/<plan-slug>.json`・orchestrator 単独書込）で resume する。`exec.md`(v3)/`exec-v4.md` は不変。
+
+`/goal:viz`: `~/.claude/commands/goal/viz.md`。承認済み plan の tasks.json（`docs/viz/SCHEMA.md` 準拠）と 3 観測 seam（.codex-out / git commit / verify journal）を融合し、dagre-d3 の固定資産 renderer で実行状態オーバーレイ付き DAG をブラウザ表示する read-only 可視化。中核ロジックは外付けスキル `~/.claude/skills/goalflow-viz/`（fuse.mjs / renderer.html / watch.sh）に置き、コア（exec.md / exec-v4.md / plan.md のフロー本体）は再定義しない。`/goal:viz <slug> --watch` で L1+file-watch 自動リフレッシュ。
 
 設計・調査 Workflow は `~/.claude/workflows/goal-plan-investigate.workflow.js` を使う。実装後の多視点逆検証 Workflow は `~/.claude/workflows/goal-exec-verify.workflow.js` を使う。
 
