@@ -14,7 +14,7 @@
 4. v4 制御は維持: commit-before-verify + baseCommit / Tier 勾配 / branch-merge バリア / loop-until-done（maxAttempts=3・maxRounds=3・no-progress）/ コスト計測。
 5. ledger（`.goalflow/state/` 状態機械）を**必須実装**に格上げ（自律 resume の前提）。
 6. 検証は `goal-exec-verify.workflow.js` を継続使用。最終判定は orchestrator（Fable 5）。`codexSummary` 引数は**無改修流用**（実装者自己申告サマリとして意味再解釈。undefined 安全・VERDICT 不関与を実測確認済）。
-7. モデル: orchestrator frontmatter = `claude-fable-5[1m]`。verify / investigate worker は sonnet のまま（現状維持・変更不要）。
+7. モデル: orchestrator は frontmatter に `model:` を書かず**セッション継承**（既定 = settings.json の `claude-fable-5[1m]`、`/model claude-opus-4-8` 明示時は Opus 4.8）。verify / investigate worker は sonnet のまま（現状維持・変更不要）。（2026-06-10 更新: 当初確定の「frontmatter = claude-fable-5[1m]」ピンを継承方式へ変更。ピンは明示 opus 経路を塞ぎ、mid-session モデル切替で prompt cache を全壊するため。/goal:plan の opus-4-8 ピンも同理由で撤去）
 8. 終端: 全タスク verified + 統合チェック後、PR仕様に従い **draft PR を自動作成して停止**（従来 hard-stop の明示緩和。ユーザ確定）。main 直接 merge・PR マージ・git 履歴改変は引き続き禁止。
 9. hook 撤去は移行期間（v3/v4 が codex を使用）を考慮し、**codex 解約と同期する follow-up**（本 goal では物理削除しない）。
 10. グローバル CLAUDE.md と memory の更新を含める。
@@ -60,7 +60,7 @@
 - [ ] task-2
   - 操作対象: `commands/goal/exec-v5.md`（新規）
   - 操作内容: exec-v4 §1-13 を母体に、次の仕様で controller を新規作成する。
-    - **frontmatter**: `description`（Claude 一本化 v5 controller。/loop 自走・draft PR 終端）/ `argument-hint: docs/plans/<goal-slug>.md` / `model: claude-fable-5[1m]` / `allowed-tools`: Read, Grep, Glob, Write, Edit, Agent, Workflow, TaskOutput, TaskGet, ToolSearch, Bash(git diff:\*), Bash(git status:\*), Bash(git add:\*), Bash(git commit:\*), Bash(git rev-parse:\*), Bash(git log:\*), Bash(git show:\*), Bash(git worktree:\*), Bash(git switch:\*), Bash(git checkout:\*), Bash(git merge:\*), Bash(git revert:\*), Bash(git branch:\*), Bash(git push:\*), Bash(gh pr create:\*), Bash(mkdir:\*), Bash(touch:\*), Bash(npm:\*), Bash(node:\*)。**実在ツールのみ列挙**（v4 の phantom `Task` を踏襲しない）。`Bash(codex exec:*)` は含めない。
+    - **frontmatter**: `description`（Claude 一本化 v5 controller。/loop 自走・draft PR 終端）/ `argument-hint: docs/plans/<goal-slug>.md` / `model:` 指定なし（セッション継承。2026-06-10 更新——要件7参照）/ `allowed-tools`: Read, Grep, Glob, Write, Edit, Agent, Workflow, TaskOutput, TaskGet, ToolSearch, Bash(git diff:\*), Bash(git status:\*), Bash(git add:\*), Bash(git commit:\*), Bash(git rev-parse:\*), Bash(git log:\*), Bash(git show:\*), Bash(git worktree:\*), Bash(git switch:\*), Bash(git checkout:\*), Bash(git merge:\*), Bash(git revert:\*), Bash(git branch:\*), Bash(git push:\*), Bash(gh pr create:\*), Bash(mkdir:\*), Bash(touch:\*), Bash(npm:\*), Bash(node:\*)。**実在ツールのみ列挙**（v4 の phantom `Task` を踏襲しない）。`Bash(codex exec:*)` は含めない。
     - **§1 唯一の真実**: v4 §1 同等（plan.md + tasks.json canonical id 貫通）。
     - **§2 permission ポリシー**: v4 §2 継承＋変更2点: (i) 終端の draft PR 自動作成を例外許可（push 先は origin の当該 goalflow 作業ブランチのみ・main 直 merge / PR マージ / 履歴改変は禁止のまま）、(ii) 履歴改変は settings.json deny で物理拒否（task-1 連動）。
     - **§3 単一タスク実行 (a)(b)(c)**: (b) を「**1タスク = 1 fresh subagent**」に置換: `Agent(subagent_type:'general-purpose', prompt = plan 設計4項目＋対象ファイル＋完了条件＋『成果サマリを `.codex-out/<task-id>.md` に Write せよ』)`。1 attempt = 1 subagent。再試行も新規 subagent（コンテキスト持ち越さない）。

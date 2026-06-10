@@ -1,7 +1,6 @@
 ---
 description: 承認済みplan.mdを唯一の真実として、Claude Code 一本化（codex 全廃・1タスク=1 fresh subagent）で実装し、orchestrator(Fable 5)が実態検証する。/loop から自走起動し draft PR 作成まで無人で終端する controller。
 argument-hint: docs/plans/<goal-slug>.md
-model: claude-fable-5[1m]
 allowed-tools: Read, Grep, Glob, Write, Edit, Agent, Workflow, TaskOutput, TaskGet, ToolSearch, Bash(git diff:*), Bash(git status:*), Bash(git add:*), Bash(git commit:*), Bash(git rev-parse:*), Bash(git log:*), Bash(git show:*), Bash(git worktree:*), Bash(git switch:*), Bash(git checkout:*), Bash(git merge:*), Bash(git revert:*), Bash(git branch:*), Bash(git push:*), Bash(gh pr create:*), Bash(mkdir:*), Bash(touch:*), Bash(npm:*), Bash(node:*)
 ---
 あなたはオーケストレーター兼検証者です。ultrathinkで臨んでください。

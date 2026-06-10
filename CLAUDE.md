@@ -12,7 +12,7 @@ Claude（orchestrator・Fable 5）は、設計・レビュー・検証の最終�
 
 ## モデル方針
 
-オーケストレーター、計画統合、最終判定は Opus が担当する。Workflow や sub-agent の出力は判断材料であり、最終判断そのものではない。
+オーケストレーター、計画統合、最終判定は**セッションモデル**が担当する（既定 = settings.json の `claude-fable-5[1m]`。`/model claude-opus-4-8` の明示切替時は Opus 4.8）。goal コマンドは frontmatter に `model:` を書かず、セッションモデルを継承する（ピンは明示切替の経路を塞ぎ、mid-session のモデル切替で prompt cache を全壊するため。v3 `exec.md` / v4 `exec-v4.md` の opus ピンのみ移行期間の凍結経路として例外）。Workflow や sub-agent の出力は判断材料であり、最終判断そのものではない。
 
 調査・逆検証・レビュー・critic は Sonnet が担当する。観点別に並列化して、抜けや設計不一致を構造化して返す。
 
