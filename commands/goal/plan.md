@@ -22,11 +22,11 @@ allowed-tools: Read, Grep, Glob, Bash(git log:*), Bash(git diff:*), Write, Workf
 3. **完了通知で再開したら**、Workflowの構造化結果（findings / critic）を回収する
    （必要なら TaskOutput で取得）。critic は視点分散の多票判定（coverage/grounding/risk）。
    Workflow は十分性を確定しない。`critic.unresolvedHighGaps`（残存する blocking な抜け）があれば、
-   Opus はそれを Read/Grep 等で自分で埋めて済ませず、手順4/5の dme ⚖️moat と同列に扱い、
+   オーケストレーターはそれを Read/Grep 等で自分で埋めて済ませず、手順4/5の dme ⚖️moat と同列に扱い、
    「## 未確定・要判断事項」の ⚖️ として人間に返す（dme: 確定は人間に返す。auto-close しない）。
    `critic.consensusComplete=true` は high gap ゼロによる収束を意味する。この場合でも、high 以外の
    `critic.missingAngles` / `critic.suggestedFollowups` の薄い観点（low/medium）は、必要に応じて
-   Read/Grep 等で Opus が補完してよい。後方互換として、`critic.consensusComplete=false` や
+   Read/Grep 等でオーケストレーターが補完してよい。後方互換として、`critic.consensusComplete=false` や
    `critic.missingAngles` の従来参照も残しつつ、high gap は `critic.unresolvedHighGaps` を優先して
    ⚖️ に回す。
 4. **Opus が `Skill(dme)` を起動し、ギャップ特定と計画作文（構造判断）を dme に委譲する**（dme をコピーせず必ず Skill 経由で呼ぶ。dme は進化するため更新を自動反映させる）:
