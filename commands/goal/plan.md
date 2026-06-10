@@ -1,8 +1,7 @@
 ---
 description: goalの実現可能性を調査し、レビュー用の計画mdを生成する（実行はしない）
 argument-hint: <goal-slug>
-model: claude-opus-4-8
-allowed-tools: Read, Grep, Glob, Bash(git log:*), Bash(git diff:*), Write, Workflow, TaskOutput, TaskGet, Task, Skill, AskUserQuestion
+allowed-tools: Read, Grep, Glob, Bash(git log:*), Bash(git diff:*), Write, Workflow, TaskOutput, TaskGet, Agent, Skill, AskUserQuestion
 ---
 あなたはオーケストレーターです。ultrathinkで臨んでください。
 このコマンドは**調査と計画の生成までで必ず停止**します。
