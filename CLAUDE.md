@@ -50,6 +50,8 @@ exec は v3 の単一タスク (a)明確化 →(b)Codex →(c)検証 を基盤�
 
 `/goal:exec-v4`: `~/.claude/commands/goal/exec-v4.md`。v3 を基盤に v4 制御（2トラック・Tier 勾配・独立バッチ worktree 並列・branch-merge バリア・loop-until-done・commit-before-verify・コスト計測）を載せた controller。`/loop` から自走起動する想定。`exec.md`(v3) は不変。
 
+`/goal:viz`: `~/.claude/commands/goal/viz.md`。承認済み plan の tasks.json（`docs/viz/SCHEMA.md` 準拠）と 3 観測 seam（.codex-out / git commit / verify journal）を融合し、dagre-d3 の固定資産 renderer で実行状態オーバーレイ付き DAG をブラウザ表示する read-only 可視化。中核ロジックは外付けスキル `~/.claude/skills/goalflow-viz/`（fuse.mjs / renderer.html / watch.sh）に置き、コア（exec.md / exec-v4.md / plan.md のフロー本体）は再定義しない。`/goal:viz <slug> --watch` で L1+file-watch 自動リフレッシュ。
+
 設計・調査 Workflow は `~/.claude/workflows/goal-plan-investigate.workflow.js` を使う。実装後の多視点逆検証 Workflow は `~/.claude/workflows/goal-exec-verify.workflow.js` を使う。
 
 ## 停止条件
