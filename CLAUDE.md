@@ -29,7 +29,7 @@ Codex（gpt-5.5）は、実装・修正を担当する。承認済み plan.md �
 1 タスク = 1 Codex 呼び出しとする。各タスク後に、対象ファイルに絞った `git diff` と実ファイルを読み、plan の設計4項目と照合する実態検証ゲートを必ず通す。
 
 ### codex 呼び出しの堅牢化（PreToolUse hook）
-codex exec は、グローバル PreToolUse hook `~/.claude/hooks/codex-exec-guard.sh`（`~/.claude/settings.json` に登録）により実行直前に **wall-clock 有界化** される。macOS に `timeout`/`gtimeout` が無いため `perl` ラッパー（`hookSpecificOutput.updatedInput` で command を rewrite）で既定 300s に bound する。hang/timeout（exit 124）や rate-limit（TPM/RPM 枯渇）が疑われる時は、hook が `additionalContext` で注入する degrade ladder（reasoning effort xhigh→high→medium / 2〜3 ファイルにチャンク / `service_tier="priority"` 除去 / 最終手段 Opus 直接）に従う。これにより `exec.md` を無編集のまま、全 session で codex の無限 hang を有界 fail-fast に置換する。根因・設計は `~/.claude/docs/plans/goal-exec-codex-large-task-hang.md`、実測の切り分けは memory `feedback_codex_ratelimit_hang` を参照。
+codex exec は、グローバル PreToolUse hook `~/.claude/hooks/codex-exec-guard.sh`（`~/.claude/settings.json` に登録）により実行直前に **wall-clock 有界化** される。GNU `timeout`/`gtimeout` を優先し（coreutils 導入済み）、実行環境に `timeout`/`gtimeout` が無い場合のみ `perl` fork/alarm ラッパーにフォールバックして、`hookSpecificOutput.updatedInput` で command を rewrite し既定 300s に bound する。hang/timeout（exit 124）や rate-limit（TPM/RPM 枯渇）が疑われる時は、hook が `additionalContext` で注入する degrade ladder（reasoning effort xhigh→high→medium / 2〜3 ファイルにチャンク / `service_tier="priority"` 除去 / 最終手段 Opus 直接）に従う。これにより `exec.md` を無編集のまま、全 session で codex の無限 hang を有界 fail-fast に置換する。根因・設計は `~/.claude/docs/plans/goal-exec-codex-large-task-hang.md`、実測の切り分けは memory `feedback_codex_ratelimit_hang` を参照。
 
 ## v4 exec 制御（2トラック）
 
