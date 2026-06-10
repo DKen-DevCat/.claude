@@ -1,0 +1,45 @@
+{
+  "planSlug": "goal-exec-v5-claude-native",
+  "generatedAt": "2026-06-10T00:20:44Z",
+  "tasks": [
+    {
+      "id": "task-1",
+      "label": "settings.json 差分commit + deny完全化",
+      "tier": "B",
+      "targets": ["settings.json"],
+      "deps": [],
+      "lane": null
+    },
+    {
+      "id": "task-2",
+      "label": "exec-v5.md 新規作成（subagent実装・ledger・draft PR終端）",
+      "tier": "A",
+      "targets": ["commands/goal/exec-v5.md"],
+      "deps": [],
+      "lane": null
+    },
+    {
+      "id": "task-3",
+      "label": "CLAUDE.md v5反映（役割/モデル/コマンド/停止条件例外）",
+      "tier": "B",
+      "targets": ["CLAUDE.md"],
+      "deps": ["task-2"],
+      "lane": null
+    },
+    {
+      "id": "task-4",
+      "label": "memory 更新（PR外・直接編集）",
+      "tier": "C",
+      "targets": [
+        "projects/-Users-ooizumiyou--claude/memory/goalflow-v4-open-threads.md",
+        "projects/-Users-ooizumiyou-nestify/memory/feedback_codex_ratelimit_hang.md"
+      ],
+      "deps": ["task-3"],
+      "lane": null
+    }
+  ],
+  "edges": [
+    { "from": "task-2", "to": "task-3" },
+    { "from": "task-3", "to": "task-4" }
+  ]
+}
