@@ -164,17 +164,18 @@ const VERDICT_SCHEMA = {
 
 const SEVERITY_RANK = { low: 1, medium: 2, high: 3, critical: 4 }
 
+// 同一 file:line は「同じ箇所の指摘」とみなして 1 件に統合する（title 基準にすると
+// 複数 lens が同じバグを別文言で挙げたとき統合されず、冗長かつ verify が重複して走る）。
+// 稀に同一行に別問題が同居しうるが、代表として最強 severity/confidence の finding を残し
+// lens を union するため、その箇所が観点越しに複数指摘されたことは失われない。
 function normalizeKey(f) {
-  const file = String(f.file || '').trim().toLowerCase()
-  const title = String(f.title || '')
+  return String(f.file || '')
     .trim()
     .toLowerCase()
-    .replace(/\s+/g, ' ')
-    .replace(/[.。!！?？、，,]+$/, '')
-  return `${file}::${title}`
+    .replace(/\s+/g, '')
 }
 
-// severity → confidence の順で強い方を残し、lens をマージする severity-aware dedup
+// file:line で束ね、severity → confidence の順で強い代表を残し、lens を union する dedup
 function dedupe(findings) {
   const byKey = new Map()
   for (const f of findings) {
