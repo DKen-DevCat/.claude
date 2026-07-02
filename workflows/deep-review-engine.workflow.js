@@ -263,8 +263,12 @@ while (round < MAX_ROUNDS) {
           label: `review:${lens.key}`,
           phase: 'Review',
           model: 'sonnet',
-          // 監査 lens は全文精読＋推論が要る。Explore は excerpt を拾い「探すが監査しない」
-          // 設計なので使わず、read/reason 能力のある既定 subagent に任せる（verifier も既定）。
+          // untrusted diff を読む lens は Edit/Write/commit を tool レベルで封じる read-only 種別に固定する
+          // （dogfood deep-review が「agentType 撤去＝安全境界が prompt 指示のみに縮退」を HIGH 検出。
+          //  特に --pr で外部 PR を読む経路では注入リスクが実在）。diff は prompt に同梱されるため
+          //  Explore の抜粋志向でも根拠は取れる。※verifier(既定 subagent)も対象ファイルを直 Read するため
+          //  同種の露出があり、LOCKDOWN への injection 条項追加は別途検討（skills 改善バッチ）。
+          agentType: 'Explore',
           schema: FINDING_SCHEMA,
         },
       ).then((r) => ({ lens: lens.key, r })),

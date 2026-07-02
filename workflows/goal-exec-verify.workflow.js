@@ -1,6 +1,6 @@
 export const meta = {
   name: 'goal-exec-verify',
-  description: '/goal:exec の検証フェーズ。実装 subagent が変更したタスクを、視点を割った複数verifierがplan設計と実ファイル/diffで逆検証し、verdictを返す（最終採否判定はorchestrator＝セッションモデルが行う）',
+  description: '/goal:exec-v5 の検証フェーズ。実装 subagent が変更したタスクを、視点を割った複数verifierがplan設計と実ファイル/diffで逆検証し、verdictを返す（最終採否判定はorchestrator＝セッションモデルが行う）',
   phases: [
     { title: 'Verify', detail: '視点分散verifier（設計一致/副作用/完了条件）がread-onlyで判定' },
   ],
@@ -81,7 +81,7 @@ log(`verify ${taskId}: ${LENSES.length} lenses, targets: ${targets.join(', ') ||
 const verdicts = (await parallel(
   LENSES.map((L) => () =>
     agent(
-      `あなたは /goal:exec の検証担当です。read-only。実装者(subagent)の自己申告を信じず、実ファイルとdiffで判定する。\n` +
+      `あなたは /goal:exec-v5 の検証担当です。read-only。実装者(subagent)の自己申告を信じず、実ファイルとdiffで判定する。\n` +
         `作業ルート: ${cwd}\n対象ファイル: ${targets.join(', ') || '(指定なし)'}\n\n` +
         `${lockdown}\n` +
         `${baselineNote ? `${baselineNote}\n` : ''}\n` +
