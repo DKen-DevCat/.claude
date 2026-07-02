@@ -270,7 +270,7 @@ while (round < MAX_ROUNDS) {
           // （dogfood deep-review が「agentType 撤去＝安全境界が prompt 指示のみに縮退」を HIGH 検出。
           //  特に --pr で外部 PR を読む経路では注入リスクが実在）。diff は prompt に同梱されるため
           //  Explore の抜粋志向でも根拠は取れる。※verifier(既定 subagent)も対象ファイルを直 Read するため
-          //  同種の露出があり、LOCKDOWN への injection 条項追加は別途検討（skills 改善バッチ）。
+          //  同種の露出があるが、そちらは LOCKDOWN の injection 条項（Read 内容も untrusted 扱い）で手当て済み。
           agentType: 'Explore',
           schema: FINDING_SCHEMA,
         },

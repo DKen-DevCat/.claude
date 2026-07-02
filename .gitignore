@@ -9,6 +9,17 @@ file-history/
 backups/
 debug/
 session-env/
+chrome/
+daemon/
+daemon.log
+downloads/
+jobs/
+.last-cleanup
+.last-update-result.json
+__pycache__/
+
+# skill-workspace scratch (eval 反復の中間生成物)
+skills/dme-workspace/desc_iter*.txt
 
 # logs / sessions / plans (auto-generated)
 history.jsonl
