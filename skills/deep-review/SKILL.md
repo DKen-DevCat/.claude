@@ -35,7 +35,7 @@ config が無い PJ では上記既定で動く旨を 1 行通知してから続
   - `low`: verifier 1票・1ラウンド（軽量・1票でも refute で棄却）
   - `medium`: verifier 2票・1ラウンド
   - `high`（既定）: verifier 3票・最大2ラウンド
-  - `max`: verifier 3票・最大3ラウンド（最深）
+  - `max`: verifier 3票・最大3ラウンド（最深）。`xhigh` は `max` の別名として受理される
 - `--fix`: 採用した指摘のみ、ユーザー承認を得てから Edit → `/check` → 承認コミット（既定はレポートのみ）
 
 ## 実行ステップ
@@ -77,7 +77,7 @@ Workflow ツールを `name: 'deep-review-engine'`、`args` に次を渡して�
 
 **すべての値は Step 1-2 で確定した実値を埋める**（上はプレースホルダ。`effort`/`localFilesMatch` を固定値で書かない）。`path` モードでは `diffText` キーごと省略する。
 
-Workflow は 9 観点 lens 並列レビュー（confidence≥80）→ severity dedup → 敵対的多票検証（refute しない側が厳密過半数のときのみ生存＝精度優先）→ effort 勾配で有界ループ、を回して `confirmed` 指摘と `rounds` 統計を返す。
+Workflow は観点別 lens 並列レビュー（confidence≥80）→ file:line dedup → 敵対的多票検証（refute しない側が厳密過半数のときのみ生存＝精度優先）→ effort 勾配で有界ループ、を回して `confirmed` 指摘と統計（`lensCount`・`verifyVotes`・`roundsRun`・`maxRounds`・`rounds`）を返す。件数は返り値の `lensCount` を使い、ハードコードしない。各 `confirmed` は代表 `lens` と、同一箇所を複数観点が指摘した場合の `lenses[]`、票欠け時の `underVerified` を持つ。
 
 ### Step 4. 最終採否判定（orchestrator = セッションモデル）
 
@@ -93,9 +93,10 @@ Workflow は 9 観点 lens 並列レビュー（confidence≥80）→ severity d
 
 - Target: <local diff | PR #<番号> | path: <path>>
 - Base: <baseCommit>
-- Lenses: 9 / verify votes: <N> / rounds: <R>
+- Lenses: <lensCount> / verify votes: <verifyVotes> / rounds: <roundsRun>（最大 <maxRounds>）
 - Domain sources: <参照した文書のカンマ区切り | none>
 - Confirmed: <M> 件（critical X / high Y / medium Z / low W、敵対検証を生存）
+- ※ <underVerified が真の件数>件は agent 失敗で票欠け（under-verified）— 参考扱い
 
 ### 採否提案
 
@@ -104,6 +105,8 @@ Workflow は 9 観点 lens 並列レビュー（confidence≥80）→ severity d
 | 1 | <要約> | path:42 | critical / 95 | domain-invariants | 採用 | ドメイン不変条件違反 |
 | 2 | <要約> | path:12 | high / 88 | correctness | 採用 | 新規バグ |
 | 3 | <要約> | path:7 | medium / 82 | maintainability | 不採用 | 既存挙動、本変更の責務外 |
+
+`lens` 列は代表 `lens` を表示し、同一箇所を複数観点が指摘した場合は `lenses[]` を `/` 区切りで併記する（例: `domain-invariants/correctness`）。`underVerified` の件は行末に `⚠️票欠け` を付す。
 
 ### 詳細
 
