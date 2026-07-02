@@ -6,7 +6,9 @@ description: 次フェーズのブランチ + 設計ドキュメント + tasks �
 # /phase-kickoff
 
 フェーズ作業を開始するときの定型作業を固定化する。
-`/phase-resume` で現状把握 → ブランチ作成 → 設計雛形 → tasks 更新 → コミット までを 1 コマンドで。
+Step1 で現状確認（`/phase-resume` 相当の軽量版を自前 git + Read で実施）→ ブランチ作成 → 設計雛形 → tasks 更新 → コミット までを 1 コマンドで。
+
+> 棲み分け: 自律実装は `/goal:exec-v5`（正本）が担う。phase-* は人間駆動の手動フェーズ運用トラックであり、phase-kickoff はそのトラックのフェーズ開始（ブランチ + design + tasks + キックオフコミット）を担う。
 
 ## 設定読み取り（先頭で一度だけ）
 
@@ -16,12 +18,14 @@ CLAUDE.md は自動ロードされている。文脈中の `## Skills config` �
 | キー | 既定値 |
 |---|---|
 | `phase.base_branch` | `develop` |
-| `phase.branch_pattern` | `feat/<phase-id>-<slug>` |
+| `phase.branch_pattern` | `feat/{phase-id}-{slug}` |
 | `phase.phase_registry` | `.claude/plan.md` |
 | `phase.tasks_file` | `.claude/tasks.md` |
 | `phase.design_dir` | `.claude/design` |
 | `phase.design_filename_pattern` | `<slug>-<YYYY-MM-DD>.md` |
 | `phase.commit_msg_hook_requires_tasks` | `true` |
+
+`branch_pattern` のトークンは `{phase-id}`（フェーズID）と `{slug}`（フェーズ概要の kebab-case スラグ）で、skill が実値へ置換して補間する（例: `feat/{phase-id}-{slug}` → `feat/S5-live-preview`）。
 
 config ブロック自体が無い PJ では、上記既定値で動作する旨をユーザーに 1 行で通知してから続行する。
 

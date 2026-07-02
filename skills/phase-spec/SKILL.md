@@ -8,6 +8,9 @@ description: 会話で固まったアイデアを抽出チェックリスト 7 �
 会話の中で揺れ動きながら固まるアイデア・要件を、**抽出チェックリスト 7 項目**で網羅検証してから phase registry に**もれなく**書き出す。
 書き込み先は **phase registry のみ**（既定）。design ファイル / tasks ファイル / ブランチには触れない — それらは `/phase-kickoff` 以降の責務。
 
+> 棲み分け: 自律実装は `/goal:exec-v5`（正本）が担う。phase-* は人間駆動の手動フェーズ運用トラックであり、phase-spec はそのトラックのフェーズ登録工程を担う。
+> 計画アーティファクトの棲み分け: 深い実現可能性調査を伴う計画は `/goal:plan`（`docs/plans/<goal-slug>.md` を生成）、フェーズ registry への軽量登録は phase-spec が担う。二重の計画アーティファクトが競合しないよう、重い調査計画は goal:plan 側に寄せ、phase-spec は registry エントリの網羅登録に徹する。
+
 ## 設定読み取り（先頭で一度だけ）
 
 CLAUDE.md は自動ロードされている。文脈中の `## Skills config` 見出し直下の最初の ```yaml フェンス内 YAML を参照して以下を確定する。
@@ -17,7 +20,7 @@ CLAUDE.md は自動ロードされている。文脈中の `## Skills config` �
 |---|---|
 | `phase.phase_registry` | `.claude/plan.md` |
 | `phase.tasks_file` | `.claude/tasks.md` |
-| `phase.branch_pattern` | `feat/<phase-id>-<slug>` |
+| `phase.branch_pattern` | `feat/{phase-id}-{slug}` |
 
 config ブロック自体が無い PJ では、上記既定値で動作する旨をユーザーに 1 行で通知してから続行する。
 

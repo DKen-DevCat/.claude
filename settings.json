@@ -33,7 +33,8 @@
     "typescript-lsp@claude-plugins-official": true,
     "gopls-lsp@claude-plugins-official": true,
     "notion@claude-plugins-official": true,
-    "stripe@claude-plugins-official": true
+    "stripe@claude-plugins-official": true,
+    "skill-creator@claude-plugins-official": true
   },
   "effortLevel": "xhigh",
   "tui": "fullscreen",

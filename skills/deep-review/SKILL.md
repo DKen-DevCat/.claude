@@ -127,7 +127,10 @@ Workflow は観点別 lens 並列レビュー（confidence≥80）→ file:line 
 
 1. 「どの指摘を修正しますか？（番号指定 / `all` / `none` / `propose`）」を問う（`propose` = Step 4 の採用提案をそのまま採用）
 2. 採用分のみ Edit / Write で適用（1 件ずつコミットしない）
-3. `/check` スキルをランタイム起動して検証を待つ。**インラインで PJ 固有の tsc/test/lint を書かない**
+3. 検証を待つ。**インラインで PJ 固有の tsc/test/lint を固定で書かない**（PJ 移行で壊れるため）:
+   - `/check` が利用可能ならランタイム起動する。
+   - 無ければ PJ の検証手段を検出して実行する（`package.json` の `scripts.check`/`test`/`lint`、`Makefile`、`justfile`、`.claude/skills/check` 等）。
+   - いずれも見つからなければ、**ユーザに検証コマンドを確認してから**進む（勝手に PASS 扱いしない）。
 4. FAIL なら追加修正を試みるか中断（**コミットは作らない**）
 5. PASS なら Conventional Commit スタイルのメッセージ案を提示し、**ユーザー承認後**に Edit/Write で変更したファイルのみを `git add <file>...` で個別に add してから `git commit`（`git add -A`/`.` は使わない — 無関係な変更の混入を防ぐ）。**push はしない**
 

@@ -79,14 +79,15 @@ goal や要件に影響する想定外が出たら、勝手に進めず、ユー
 
 phase-* グローバル skill は、各プロジェクトの CLAUDE.md 内 `## Skills config` 直下にある最初の YAML フェンスを契約面として読む。project skill がある場合は global skill を上書きするが、Skills config はどの階層の skill からも参照される。
 
-主なキーは `base_branch`、`branch_pattern`、`phase_registry`、`tasks_file`、`design_dir`、`commit_msg_hook_requires_tasks` などである。config 不在時は、`base_branch=develop`、`phase_registry=.claude/plan.md`、`tasks_file=.claude/tasks.md`、`design_dir=.claude/design`、`commit_msg_hook_requires_tasks=true` を既定とする。
+主なキーは `base_branch`、`branch_pattern`、`review_cmd`、`phase_registry`、`tasks_file`、`design_dir`、`commit_msg_hook_requires_tasks` などである。config 不在時は、`base_branch=develop`、`branch_pattern=feat/{phase-id}-{slug}`、`review_cmd=/code-review`、`phase_registry=.claude/plan.md`、`tasks_file=.claude/tasks.md`、`design_dir=.claude/design`、`commit_msg_hook_requires_tasks=true` を既定とする。`branch_pattern` のトークンは `{phase-id}`（フェーズID）と `{slug}`（kebab スラグ）で、skill が実値へ補間する。`review_cmd` は phase-review が起動するレビューコマンド（グローバル既定 `/code-review`。PJ ローカルの `/review-diff` 等を使う場合のみ上書き）。拡張キー `design_filename_pattern`（phase-kickoff）・`tasks_archive_dir`（phase-resume）も skill 側で参照される。
 
 最小サンプル:
 
 ```yaml
 phase:
   base_branch: develop
-  branch_pattern: "phase/{slug}"
+  branch_pattern: "feat/{phase-id}-{slug}"
+  review_cmd: /code-review
   phase_registry: .claude/plan.md
   tasks_file: .claude/tasks.md
   design_dir: .claude/design
