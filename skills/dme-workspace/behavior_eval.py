@@ -12,6 +12,11 @@ require の観点が全て true（premise_trap なら premise_surfaced も）で
 import argparse, json, re, subprocess, sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+# ネストした `claude -p` は親セッションの MCP 設定を全て初期化しようとし、
+# サーバ数次第で1呼び出し数分かかる（2026-07-02 実測: MCP 有効 5分45秒 → 無効 7秒）。
+# eval はプレーンテキスト応答しか要らないので MCP を明示無効化する。
+MCP_OFF = ["--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}']
+
 EXEC_TEMPLATE = """あなたは次の「スキル」に厳密に従って回答するアシスタントです。
 スキルの出力契約（## スコープ＋観察 / ## 構造・流れの仮説 / ## 検証—ズレ / ⚖️ moat / → あなたが決めるのはここ）に沿って答えてください。
 
@@ -47,10 +52,10 @@ JUDGE_TEMPLATE = """あなたは dme スキルの「挙動」を採点する審�
 {{"loop": bool, "moat_left": bool, "multi_hypo": bool, "premise_surfaced": bool, "recursion_visible": bool, "notes": "<=25字の総評"}}"""
 
 
-def run_cli(prompt, model, timeout=300):
+def run_cli(prompt, model, timeout=600):
     try:
         out = subprocess.run(
-            ["claude", "-p", prompt, "--model", model],
+            ["claude", "-p", prompt, "--model", model, *MCP_OFF],
             capture_output=True, text=True, timeout=timeout,
         )
     except subprocess.TimeoutExpired:
@@ -70,12 +75,12 @@ def parse_json(text):
         return None
 
 
-def evaluate_one(item, skill, exec_model, judge_model):
-    out = run_cli(EXEC_TEMPLATE.format(skill=skill, query=item["query"]), exec_model)
+def evaluate_one(item, skill, exec_model, judge_model, timeout=600):
+    out = run_cli(EXEC_TEMPLATE.format(skill=skill, query=item["query"]), exec_model, timeout)
     if not out:
         return {"id": item["id"], "error": "executor empty", "output": "", "scores": None}
     verdict = parse_json(run_cli(
-        JUDGE_TEMPLATE.format(query=item["query"], output=out), judge_model))
+        JUDGE_TEMPLATE.format(query=item["query"], output=out), judge_model, timeout))
     return {"id": item["id"], "output": out, "scores": verdict,
             "require": item["require"], "premise_trap": item.get("premise_trap", False)}
 
@@ -100,6 +105,7 @@ def main():
     ap.add_argument("--judge-model", default="claude-sonnet-4-6")
     ap.add_argument("--out", required=True)
     ap.add_argument("--workers", type=int, default=4)
+    ap.add_argument("--timeout", type=int, default=600)
     args = ap.parse_args()
 
     data = json.load(open(args.eval_set))
@@ -108,7 +114,7 @@ def main():
 
     results = []
     with ThreadPoolExecutor(max_workers=args.workers) as ex:
-        fut = {ex.submit(evaluate_one, it, skill, args.exec_model, args.judge_model): it["id"]
+        fut = {ex.submit(evaluate_one, it, skill, args.exec_model, args.judge_model, args.timeout): it["id"]
                for it in evals}
         for f in as_completed(fut):
             results.append(f.result())
