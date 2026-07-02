@@ -13,7 +13,7 @@ description: 明示的に呼ばれた時だけ発動する高品質レビュー�
 レビュー本体は Workflow `deep-review-engine` が担い、本スキルは「対象確定・ドメイン知識の自動探索・最終採否判定・出力・`--fix`」を担う。
 lens の**枠は本スキルに同梱**（Workflow 内 `LENSES`）、**中身（ドメイン知識）は repo から実行時に自動探索**して注入する。
 
-モデル方針: orchestrator（本スキル）= セッションモデル（既定 Fable 5、`/model` 明示切替時はそれ）。lens / verifier = Sonnet（Workflow 側で固定）。
+モデル方針: orchestrator（本スキル）= セッションモデル（既定は settings.json＝`~/.claude/CLAUDE.md` の「モデル台帳」参照。`/model` 明示切替時はそれ）。lens / verifier = Sonnet（Workflow 側で固定）。
 
 ## 設定読み取り（先頭で一度だけ）
 

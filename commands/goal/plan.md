@@ -5,7 +5,7 @@ allowed-tools: Read, Grep, Glob, Bash(git log:*), Bash(git diff:*), Write, Workf
 ---
 あなたはオーケストレーターです。ultrathinkで臨んでください。
 このコマンドは**調査と計画の生成までで必ず停止**します。
-いかなる実装・ファイル編集・codex呼び出しも禁止です。
+いかなる実装・プロダクションコード編集・subagent への実装委譲も禁止です（生成物は plan.md のみ）。
 
 ## 入力
 ユーザが対話で渡す: goal / なぜ必要か / 要件 / 把握している前提情報
@@ -22,14 +22,14 @@ allowed-tools: Read, Grep, Glob, Bash(git log:*), Bash(git diff:*), Write, Workf
 3. **完了通知で再開したら**、Workflowの構造化結果（findings / critic）を回収する
    （必要なら TaskOutput で取得）。critic は視点分散の多票判定（coverage/grounding/risk）。
    Workflow は十分性を確定しない。`critic.unresolvedHighGaps`（残存する blocking な抜け）があれば、
-   Opus はそれを Read/Grep 等で自分で埋めて済ませず、手順4/5の dme ⚖️moat と同列に扱い、
+   オーケストレーターはそれを Read/Grep 等で自分で埋めて済ませず、手順4/5の dme ⚖️moat と同列に扱い、
    「## 未確定・要判断事項」の ⚖️ として人間に返す（dme: 確定は人間に返す。auto-close しない）。
    `critic.consensusComplete=true` は high gap ゼロによる収束を意味する。この場合でも、high 以外の
    `critic.missingAngles` / `critic.suggestedFollowups` の薄い観点（low/medium）は、必要に応じて
-   Read/Grep 等で Opus が補完してよい。後方互換として、`critic.consensusComplete=false` や
+   Read/Grep 等でオーケストレーターが補完してよい。後方互換として、`critic.consensusComplete=false` や
    `critic.missingAngles` の従来参照も残しつつ、high gap は `critic.unresolvedHighGaps` を優先して
    ⚖️ に回す。
-4. **Opus が `Skill(dme)` を起動し、ギャップ特定と計画作文（構造判断）を dme に委譲する**（dme をコピーせず必ず Skill 経由で呼ぶ。dme は進化するため更新を自動反映させる）:
+4. **オーケストレーターが `Skill(dme)` を起動し、ギャップ特定と計画作文（構造判断）を dme に委譲する**（dme をコピーせず必ず Skill 経由で呼ぶ。dme は進化するため更新を自動反映させる）:
    - findings / critic を素材に dme ループを回す。②推測を主に、①観察・③照合は findings に対して行い、現状と goal のギャップを特定する。dme は自走で構造（タスク構造・PR境界）と ⚖️moat を返す。
    - dme には、競合する設計候補 / PR境界候補を最低2案出すことを必須要求する。単一解が妥当な場合は、その理由を明記させる。
    - 候補が複数ある場合のみ、設計候補 / PR境界候補にペア比較トーナメントを回す。候補を2つずつ比較し、実行級の比較（正しさ・きれいさ・idiomatic さ）では勝者を champion として採用する。候補が単一ならこの段はスキップし、比較手順を空振りさせない。
@@ -79,5 +79,5 @@ allowed-tools: Read, Grep, Glob, Bash(git log:*), Bash(git diff:*), Write, Workf
 最後に「plan.md を確認・編集のうえ /goal:exec を実行してください」と伝えて停止する。
 
 ## フォールバック
-Workflowが利用不可/失敗した場合は、従来どおり調査を sonnet 4.6 のsub-agentに
+Workflowが利用不可/失敗した場合は、従来どおり調査を Sonnet（CLAUDE.md モデル台帳の worker/verifier モデル）の sub-agent に
 並列・read-onlyで委譲（または自分で調査）して計画を作る。停止条件・出力構造は不変。

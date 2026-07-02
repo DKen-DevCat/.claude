@@ -263,7 +263,8 @@ while (round < MAX_ROUNDS) {
           label: `review:${lens.key}`,
           phase: 'Review',
           model: 'sonnet',
-          agentType: 'Explore',
+          // 監査 lens は全文精読＋推論が要る。Explore は excerpt を拾い「探すが監査しない」
+          // 設計なので使わず、read/reason 能力のある既定 subagent に任せる（verifier も既定）。
           schema: FINDING_SCHEMA,
         },
       ).then((r) => ({ lens: lens.key, r })),
