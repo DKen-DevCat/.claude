@@ -129,7 +129,14 @@ worktree 隔離下での subagent write の着地・並列発火と待ち合わ�
 
 - **置き場所**: `.goalflow/state/<plan-slug>.json`（`.goalflow/` は `.gitignore` 済み＝PR diff に入らない）。
 - **run-id**: `<plan-slug>-r<連番>`。ledger 内の field として持つ。**再 /loop は同じ `<plan-slug>.json` を slug で引き、未完タスクから resume する**（決定論的に同一 ledger に収束。日付+SHA 採番は resume を壊すため使わない）。新規 run のみ連番を increment する。`startedAt`（ISO8601）を記録。
-- **書き手は orchestrator 単独**（唯一 race-free）。subagent には ledger を書かせない（並列時の subagent は worktree 配下で走るため、ledger 書込が worktree コピーへ落ち cleanup で消失し得る＝構造的に不可）。harness が「各 subagent / Workflow の完了通知ごとに orchestrator を再起動する」性質が、並列バッチでも単一書込点を自然に与える（並列時の実挙動は canary 条件4 §6.1 で実地観察する）。
+- **書き手は orchestrator 単独**。subagent には ledger を書かせない（並列時の subagent は worktree 配下で走るため、ledger 書込が worktree コピーへ落ち cleanup で消失し得る＝構造的に不可）。harness が「各 subagent / Workflow の完了通知ごとに orchestrator を再起動する」性質が、並列バッチでも単一書込点を自然に与える。race-free は「単一書込点 ＋ canary 条件4（§6.1）で近接完了時の ledger JSON 整合を実地観察する」ことで担保する確度であり、機構だけで無条件に保証済みとは扱わない。
+- **per-task schema（並列拡張）**: 現状ベースライン＝現行実装の実フィールド `{state, tier, baseCommit, headCommit, note?}`。並列 run ではこれを次で拡張する:
+  - `worktreePath`: 当該タスクの worktree 絶対パス（直列＝統合 branch 上の実行時はその checkout パス。non-git は `null`）。
+  - `branch`: 当該タスクの branch 名（`goalflow/<run-id>/<task-id>`。統合 branch 上の直列時は統合 branch 名。non-git は `null`）。
+  - `batch`: 所属バッチ ID（並列バッチ / 直列バッチの別を含むバッチ単位の追跡キー）。
+  - `nonGit`: `true` のとき §4.3 の non-git タスク（`baseCommit = null`・worktree / バリア不適用）。
+  この4フィールドにより、並列 run の resume・cleanup・監査が ledger だけで再構成可能になる。
+- **worktreePath の伝播規約（単一の規約）**: worktreePath の情報源は **orchestrator 自身が実行した `git worktree add <path> -b <branch> <baseCommit>` の引数（§6）＝自己申告に依存しない一次情報**である。これを **①取得 → ②ledger 保持（上記 `worktreePath` / `branch`）→ ③per-task commit（§4.2 の `git -C <worktreePath>`）・verify の cwd 注入（§4.2 の `cwd = <worktreePath>`）・cleanup（§7 の `git worktree remove <worktreePath>`）への伝播**、という一方向の流れで一貫して用いる。subagent が `.goalflow/out/<task-id>.md` 冒頭に書く `git rev-parse --show-toplevel` 等の自己申告（§6）は**照合用**であり、伝播の情報源にはしない。
 - **状態遷移**: `created → running → committed → verified → aboutToMerge → merged → integrationOk → cleaned`（分岐 `failed` / `rolledBack`）。
 - **write point**（各 seam の直後に orchestrator が書く）: subagent 完了通知（running）/ per-task commit（committed）/ verify 完了（verified | failed）/ merge（aboutToMerge → merged）/ 統合チェック（integrationOk）/ worktree cleanup（cleaned）。
 
