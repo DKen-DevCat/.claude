@@ -47,21 +47,37 @@ plan.md の当該タスクから4項目を確定して宣言する: 操作対象
 ### (c) 実態検証（§4 の commit-before-verify を経て検証Workflow → orchestrator 最終判定）
 
 ## 4. commit-before-verify 規律 ＋ baseCommit 注入（verify 構造解の前提）
-verify の構造解（`goal-exec-verify.workflow.js` の baseCommit baseline）を成立させるため、controller が **commit 規律と baseCommit の渡し手**を持つ:
+verify の構造解（`goal-exec-verify.workflow.js` の baseCommit baseline）を成立させるため、controller が **commit 規律と baseCommit の渡し手**を持つ。規律は**直列 / 並列の二相**で書き分ける（目的は共通: verifier に「真の task 差分のみ」を根拠として渡す）。
+
+### 4.1 直列時（§3 直列パス）
 1. subagent spawn の**直前**に `git rev-parse HEAD` で `baseCommit` を取得・記録（ledger にも）。
 2. subagent 完了後、**当該タスクの成果を orchestrator が per-task でコミット**（diff をクリーンに保つ。commit はタスク単位）。
-3. verify Workflow 起動時、args に **`baseCommit` を渡し**、`diffText` は `git diff <baseCommit>..HEAD -- <対象ファイル>` でスコープして渡す。
-   - これにより verifier は**真の task 差分のみ**を根拠に判定できる（直列・並列とも）。
-   - **`implementerSummary`（実装者の自己申告サマリ）**: subagent が `.goalflow/out/<task-id>.md` に書いた要約を渡す（workflow は VERDICT 算出に不関与・参考注入のみ。旧 `codexSummary` 引数名も workflow 側で後方互換に受理される）。
+3. verify Workflow 起動時、args に **`baseCommit` を渡し**、`diffText` は `git diff <baseCommit>..HEAD -- <対象ファイル>` でスコープして渡す。`cwd` は main checkout の絶対パス。
+
+### 4.2 並列時（§6 worktree バッチ）
+1. **baseCommit = worktree add 時点の統合 branch HEAD**。バッチ内の全 worktree で共通であり、orchestrator が `git worktree add <path> -b <branch> <baseCommit>` の引数に**明示指定した SHA そのもの**を用いる（＝orchestrator が握る一次情報。subagent の自己申告や worktree 内での再取得に依存しない）。
+2. subagent 完了後、per-task commit は **orchestrator が worktree に向けて** `git -C <worktreePath> add <target-files>... && git -C <worktreePath> commit` で行う（add 対象は当該タスクの target-files のみ＝§6.1 条件3 の書込封じ込めと整合）。
+3. verify への注入:
+   - `diffText = git -C <worktreePath> diff <baseCommit>..HEAD -- <targets>`
+   - `cwd = <worktreePath>`（worktree の絶対パス）
+   - **`targets` は worktree 起点の絶対パス**で渡す（`<worktreePath>/…`）。`goal-exec-verify.workflow.js` は cwd 起点の絶対パス正規化ガードを持つが、**呼び出し側も絶対パスで渡すのを規律とする**（ガードに依存しない）。
+   - これにより verifier は並列時も**当該 worktree 上の真の task 差分のみ**を根拠に判定できる（workflow の lockdown 契約＝自前 git・独自 baseline の封じは無改修で維持）。
+
+### 4.3 non-git タスク（両相共通の例外）
+plan で `non-git: true` が付いたタスク（gitignored 等の非 git 管理 target）は **`baseCommit = null`・worktree / branch-merge バリア不適用の直列扱い**とする: main checkout 上で直接 fs 編集し、commit はせず、**orchestrator が変更内容（対象ファイルの実体）を直接確認**して採否を決める（diff baseline が存在しないため §4.1/4.2 の diffText 注入は行わない）。
+
+### 4.4 共通（implementerSummary・検証Workflow・最終判定）
+- **`implementerSummary`（実装者の自己申告サマリ）**: subagent が `.goalflow/out/<task-id>.md` に書いた要約を渡す（workflow は VERDICT 算出に不関与・参考注入のみ。旧 `codexSummary` 引数名も workflow 側で後方互換に受理される）。
 
 検証Workflow:
 
     Workflow: scriptPath /Users/ooizumiyou/.claude/workflows/goal-exec-verify.workflow.js
-      args: { taskId, targets:[対象ファイル], planExcerpt:<当該タスクのplan設計4項目>,
-              diffText:<git diff baseCommit..HEAD -- 対象ファイル>, baseCommit:<上記SHA>,
-              implementerSummary:<.goalflow/out/<task-id>.md 要約>, cwd:<絶対パス> }
+      args: { taskId, targets:[対象ファイルの絶対パス（並列時は worktree 起点）], planExcerpt:<当該タスクのplan設計4項目>,
+              diffText:<§4.1 直列 = git diff baseCommit..HEAD -- targets / §4.2 並列 = git -C worktreePath diff baseCommit..HEAD -- targets>,
+              baseCommit:<上記SHA>, implementerSummary:<.goalflow/out/<task-id>.md 要約>,
+              cwd:<直列 = main checkout / 並列 = worktreePath の絶対パス> }
 
-**最終判定は orchestrator（セッションモデル）自身**。verdicts を踏まえ自分でも `git diff baseCommit..HEAD` と対象ファイルを読み採否を決める。consensusMatch=false / high severity 乖離があれば (b) へ差し戻し（新しい subagent を spawn）。
+**最終判定は orchestrator（セッションモデル）自身**。verdicts を踏まえ自分でも同じ diff（直列 = `git diff baseCommit..HEAD` / 並列 = `git -C <worktreePath> diff baseCommit..HEAD`）と対象ファイルを読み採否を決める。consensusMatch=false / high severity 乖離があれば (b) へ差し戻し（新しい subagent を spawn）。
 
 ## 5. Tier 勾配（verify 深度専用）
 Tier は**検証の深さのみ**を定める。**並列可否とは無関係**——並列可否は「**`depends-on` なし ∧ `target-files` 互いに素**」のみで判定し、**全 Tier が並列可**（§6）。
