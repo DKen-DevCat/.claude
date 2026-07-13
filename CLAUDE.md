@@ -35,7 +35,7 @@ orchestrator（セッションモデル）は、設計・レビュー・検証�
 
 承認済み plan.md が唯一の真実である。記載外の実装、リファクタ、追加調査、仕様変更は行わない。
 
-`/goal:plan` は goal / なぜ / 要件 / 前提を固め、調査 Workflow の結果をオーケストレーターが統合して `docs/plans/<goal-slug>.md` を生成し、そこで必ず停止する。実装・ファイル編集・subagent への実装委譲は禁止する。
+`/goal:plan` は goal / なぜ / 要件 / 前提を固め、調査 Workflow の結果をオーケストレーターが統合して `docs/plans/<goal-slug>.md` を生成し、そこで必ず停止する。実装・ファイル編集・subagent への実装委譲は禁止する。plan.md の各タスクには `depends-on` / `target-files`（非 git 管理 target は `non-git: true`）を必須で持たせ、`## 並列バッチ構成` を出力する（exec はこれらフィールドからバッチを再導出して照合する）。
 
 `/goal:exec-v5` は承認済み plan.md を真実として、task ごとに実装と検証を進める。plan が無ければ exec しない。
 
@@ -47,8 +47,8 @@ exec は単一タスク (a)明確化 →(b)実装 subagent →(c)検証 を基�
 
 - **2トラック**: `/loop`（interval 省略 = dynamic）が `/goal:exec-v5 <plan>` を fire して直列に自走する（subagent/verify の完了通知が primary wake、`ScheduleWakeup` は fallback heartbeat）。controller は独立バッチの worktree 並列と branch-merge バリアを担う。
 - **commit-before-verify ＋ baseCommit**: subagent spawn 直前に `git rev-parse HEAD` で baseCommit を取り、タスク成果を per-task でコミットしてから、verify に `baseCommit` と `git diff baseCommit..HEAD` を渡す。verifier は真の task 差分のみを根拠にする（自前 git・独自 baseline は workflow 側で封じる）。
-- **Tier 勾配**: Tier A = フル3レンズ検証、B = build/test 軽ゲート + diff 精読、C = 統合チェックのみ。初回から「target 互いに素 ∧ 依存なし ∧ テスト被覆ありの低リスク」を Tier B/C と自然判定してよい。
-- **独立バッチ並列 ＋ branch-merge バリア**: 独立バッチを worktree+branch に分離して並列実行し、verified branch を `merge --no-ff` で1つずつ統合して各回統合チェックする。失敗は `git revert` / worktree 破棄で戻す（履歴は改変しない）。**※並列は dogfood 未実証のため直列フォールバックが既定**（exec-v5 §6）。
+- **Tier 勾配（verify 深度専用）**: Tier A = フル3レンズ検証、B = build/test 軽ゲート + diff 精読、C = 統合チェックのみ。Tier は検証の深さのみを定め、**並列可否とは無関係**（並列可否は depends-on / target-files のみで判定・全 Tier が並列可 = exec-v5 §5）。
+- **独立バッチ並列 ＋ branch-merge バリア**: **並列が既定**（plan.md の depends-on / target-files から独立バッチ =「depends-on なし ∧ target-files 互いに素」を導出。Tier とは無関係）。独立バッチを worktree+branch に分離して並列実行し、verified branch を `merge --no-ff` で1つずつ統合して各回統合チェックする。失敗は `git revert` / worktree 破棄で戻す（履歴は改変しない）。初回並列 run は canary 受け入れ条件付きで、失敗時は直列降格する（exec-v5 §6・§6.1）。
 - **loop-until-done**: 全タスク完了まで主ループを回す。終了保証 = maxAttempts / maxRounds / no-progress。
 - **ledger**: `.goalflow/state/<plan-slug>.json`（`.gitignore` 済・orchestrator 単独書込）で resume（exec-v5 §8）。
 - **コスト計測**: workflow journal の totalTokens ＋ 実装 subagent トークン ＋ session usage を read-only で集計する。
