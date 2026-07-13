@@ -1,12 +1,13 @@
 export const meta = {
   name: 'goal-exec-verify',
-  description: '/goal:exec の検証フェーズ。codex実行済みタスクを、視点を割った複数verifierがplan設計と実ファイル/diffで逆検証し、verdictを返す（最終採否判定はOpusが行う）',
+  description: '/goal:exec-v5 の検証フェーズ。実装 subagent が変更したタスクを、視点を割った複数verifierがplan設計と実ファイル/diffで逆検証し、verdictを返す（最終採否判定はorchestrator＝セッションモデルが行う）',
   phases: [
     { title: 'Verify', detail: '視点分散verifier（設計一致/副作用/完了条件）がread-onlyで判定' },
   ],
 }
 
-// args: { taskId, targets:[paths], planExcerpt, diffText, codexSummary, cwd, baseCommit }
+// args: { taskId, targets:[paths], planExcerpt, diffText, implementerSummary, cwd, baseCommit }
+//   （旧 codexSummary 引数名も後方互換で受理する）
 // Workflowランタイムは args をJSON文字列で渡す場合があるため防御的にパースする
 let a = args || {}
 if (typeof a === 'string') {
@@ -16,7 +17,7 @@ const taskId = a.taskId || 'task'
 const targets = Array.isArray(a.targets) ? a.targets : []
 const planExcerpt = a.planExcerpt || ''
 const diffText = a.diffText || '(diff未提供。対象ファイルと plan 設計の整合のみ見よ。pre-existing/未コミット差分を副作用と見なすな)'
-const codexSummary = a.codexSummary || ''
+const implementerSummary = a.implementerSummary || a.codexSummary || ''
 const cwd = a.cwd || '.'
 const baseCommit = a.baseCommit || ''
 const lockdown =
@@ -80,13 +81,13 @@ log(`verify ${taskId}: ${LENSES.length} lenses, targets: ${targets.join(', ') ||
 const verdicts = (await parallel(
   LENSES.map((L) => () =>
     agent(
-      `あなたは /goal:exec の検証担当です。read-only。codexの自己申告を信じず、実ファイルとdiffで判定する。\n` +
+      `あなたは /goal:exec-v5 の検証担当です。read-only。実装者(subagent)の自己申告を信じず、実ファイルとdiffで判定する。\n` +
         `作業ルート: ${cwd}\n対象ファイル: ${targets.join(', ') || '(指定なし)'}\n\n` +
         `${lockdown}\n` +
         `${baselineNote ? `${baselineNote}\n` : ''}\n` +
         `plan設計(抜粋):\n${planExcerpt}\n\n` +
         `git diff:\n${diffText}\n\n` +
-        `codex報告(参考のみ):\n${codexSummary}\n\n` +
+        `実装者サマリ(参考のみ):\n${implementerSummary}\n\n` +
         `担当レンズ[${L.key}]: ${L.focus}\n` +
         `対象ファイルを Read し、上のdiffと突き合わせ、schemaに従って構造化判定を返せ。`,
       { label: `verify:${taskId}:${L.key}`, phase: 'Verify', model: 'sonnet', schema: VERDICT_SCHEMA }

@@ -1,12 +1,14 @@
 ---
 name: phase-review
-description: /review-diff + /security-review を並列実行して指摘を統合し、採否を TaskCreate で承認ベース管理する。--fix で修正 + /check + コミットまで
+description: phase.review_cmd（既定 /code-review）+ /security-review を並列実行して指摘を統合し、採否を TaskCreate で承認ベース管理する。--fix で修正 + /check + コミットまで
 ---
 
 # /phase-review
 
-`/review-diff` と `/security-review` を 1 コマンドで回し、採否管理を統一する。
+`phase.review_cmd`（既定 `/code-review`）と `/security-review` を 1 コマンドで回し、採否管理を統一する。
 `/phase-ship` の中盤と同じロジック。レビューだけ単独で叩きたい場面のために分離。
+
+> 棲み分け: 自律実装は `/goal:exec-v5`（正本）が担う。phase-* は人間駆動の手動フェーズ運用トラックであり、phase-review はそのトラックのレビュー / 修正工程を担う。
 
 ## 設定読み取り（先頭で一度だけ）
 
@@ -18,6 +20,9 @@ CLAUDE.md は自動ロードされている。文脈中の `## Skills config` �
 | `phase.base_branch` | `develop` |
 | `phase.tasks_file` | `.claude/tasks.md` |
 | `phase.commit_msg_hook_requires_tasks` | `true` |
+| `phase.review_cmd` | `/code-review` |
+
+`phase.review_cmd` はスタイル / バグ用のレビューコマンド。config 未設定なら `/code-review` を使う（旧 `/review-diff` はグローバルに存在しないため直参照しない。PJ ローカルの `/review-diff` 等を使う場合のみ config で上書きする）。
 
 config ブロック自体が無い PJ では、上記既定値で動作する旨をユーザーに 1 行で通知してから続行する。
 
@@ -25,8 +30,8 @@ config ブロック自体が無い PJ では、上記既定値で動作する旨
 
 - `--pr <番号>` : PR の差分を対象にする（指定しない場合はローカル差分）
 - `--fix` : 採用とした指摘について、ユーザー承認を得てから Edit で修正 + `/check` + コミットまで行う
-- `--skip-security` : `/security-review` をスキップして `/review-diff` のみ実行
-- `--skip-style` : `/review-diff` をスキップして `/security-review` のみ実行（セキュリティ単独監査用）
+- `--skip-security` : `/security-review` をスキップして `phase.review_cmd`（既定 `/code-review`）のみ実行
+- `--skip-style` : `phase.review_cmd`（既定 `/code-review`）をスキップして `/security-review` のみ実行（セキュリティ単独監査用）
 
 ## 実行ステップ
 
@@ -46,10 +51,10 @@ config ブロック自体が無い PJ では、上記既定値で動作する旨
 内容を本コマンドで再定義せず、ランタイムで対象コマンドを起動する（ドキュメント間の参照は仕様ズレの原因になるため避ける）。
 
 #### 2a. `--skip-style` でない場合
-`/review-diff`（`--pr <番号>` 指定時はそのまま渡す、`--fix` は本コマンドが管理するので渡さない）を起動して結果を待つ。confidence ≥ 80 の指摘を回収する。
+`phase.review_cmd`（既定 `/code-review`。`--pr <番号>` 指定時はそのまま渡す、`--fix` は本コマンドが管理するので渡さない）を起動して結果を待つ。confidence ≥ 80（0-100 スケール）の指摘を回収する。
 
 #### 2b. `--skip-security` でない場合
-`/security-review` を起動して結果を待つ。HIGH / MEDIUM のみ（confidence ≥ 0.8）を回収する。
+`/security-review` を起動して結果を待つ。HIGH / MEDIUM のみ（confidence ≥ 80。0-100 スケールに正規化して比較する）を回収する。`/security-review` が数値 confidence を出さない場合は severity（HIGH / MEDIUM）のみで採否する。
 
 ### Step 3. 結果の統合
 
@@ -67,9 +72,9 @@ config ブロック自体が無い PJ では、上記既定値で動作する旨
 ### Review summary
 
 - Target: <local diff | PR #<番号>>
-- /review-diff: M1 件（Critical X / Important Y）
+- review (`phase.review_cmd`, 既定 `/code-review`): M1 件（Critical X / Important Y）
 - /security-review: M2 件（HIGH X / MEDIUM Y）
-- 統合後: N 件（confidence ≥ 80）
+- 統合後: N 件（confidence ≥ 80、0-100 スケール）
 
 ### 採否提案
 

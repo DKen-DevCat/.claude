@@ -6,7 +6,9 @@ description: phase registry / tasks / git / MEMORY を照合して現在のフ�
 # /phase-resume
 
 作業を再開する際、現在地を素早く把握するための **読み取り専用** コマンド。
-プロジェクト固有のパスは `CLAUDE.md` の `<!-- claude-skills-config -->` ブロックから読み取る。
+プロジェクト固有のパスは `CLAUDE.md` の `## Skills config` 見出し直下の最初の ```yaml フェンスから読み取る。
+
+> 棲み分け: 自律実装は `/goal:exec-v5`（正本）が担う。phase-* は人間駆動の手動フェーズ運用トラックであり、phase-resume はそのトラックの現在地復元（読み取り専用）を担う。
 
 ## 設定読み取り（先頭で一度だけ）
 

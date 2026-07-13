@@ -5,7 +5,7 @@ allowed-tools: Read, Grep, Glob, Bash(git log:*), Bash(git diff:*), Write, Workf
 ---
 あなたはオーケストレーターです。ultrathinkで臨んでください。
 このコマンドは**調査と計画の生成までで必ず停止**します。
-いかなる実装・ファイル編集・codex呼び出しも禁止です。
+いかなる実装・プロダクションコード編集・subagent への実装委譲も禁止です（生成物は plan.md のみ）。
 
 ## 入力
 ユーザが対話で渡す: goal / なぜ必要か / 要件 / 把握している前提情報
@@ -29,7 +29,7 @@ allowed-tools: Read, Grep, Glob, Bash(git log:*), Bash(git diff:*), Write, Workf
    Read/Grep 等でオーケストレーターが補完してよい。後方互換として、`critic.consensusComplete=false` や
    `critic.missingAngles` の従来参照も残しつつ、high gap は `critic.unresolvedHighGaps` を優先して
    ⚖️ に回す。
-4. **Opus が `Skill(dme)` を起動し、ギャップ特定と計画作文（構造判断）を dme に委譲する**（dme をコピーせず必ず Skill 経由で呼ぶ。dme は進化するため更新を自動反映させる）:
+4. **オーケストレーターが `Skill(dme)` を起動し、ギャップ特定と計画作文（構造判断）を dme に委譲する**（dme をコピーせず必ず Skill 経由で呼ぶ。dme は進化するため更新を自動反映させる）:
    - findings / critic を素材に dme ループを回す。②推測を主に、①観察・③照合は findings に対して行い、現状と goal のギャップを特定する。dme は自走で構造（タスク構造・PR境界）と ⚖️moat を返す。
    - dme には、競合する設計候補 / PR境界候補を最低2案出すことを必須要求する。単一解が妥当な場合は、その理由を明記させる。
    - 候補が複数ある場合のみ、設計候補 / PR境界候補にペア比較トーナメントを回す。候補を2つずつ比較し、実行級の比較（正しさ・きれいさ・idiomatic さ）では勝者を champion として採用する。候補が単一ならこの段はスキップし、比較手順を空振りさせない。
@@ -46,7 +46,7 @@ allowed-tools: Read, Grep, Glob, Bash(git log:*), Bash(git diff:*), Write, Workf
    作業フロー図（mermaid）/ 解決タスクと goal への効果 /
    PR外への影響（影響範囲と影響、無ければ「なし」）/
    Verification（検証コマンド。build/test。共通の build/test が無い repo では「なし（または手レビュー）」と明記可）/ その他共有事項。
-   この PR仕様は /goal:exec が PR 本文を書く際の唯一の根拠になるため、plan 段階で確定させる。
+   この PR仕様は /goal:exec-v5 が PR 本文を書く際の唯一の根拠になるため、plan 段階で確定させる。
 
 ## 出力
 `docs/plans/$ARGUMENTS.md` に下記構造で書き出して**ターンを終了**する:
@@ -61,7 +61,7 @@ allowed-tools: Read, Grep, Glob, Bash(git log:*), Bash(git diff:*), Write, Workf
   - 影響場所と効果:
   - goalへの影響:
 ## 未確定・要判断事項
-## PR仕様（PR / スコープごと。/goal:exec はこの仕様どおりに PR 本文を書く）
+## PR仕様（PR / スコープごと。/goal:exec-v5 はこの仕様どおりに PR 本文を書く）
 - PR-1: <対象リポジトリ / スコープ>
   - 目的: 本PRで達成すること
   - 満たすべき要件:
@@ -73,24 +73,11 @@ allowed-tools: Read, Grep, Glob, Bash(git log:*), Bash(git diff:*), Write, Workf
     ```
   - 解決タスクと goal への効果: 本PR内で解決する実行計画タスクと、PR goal への効果
   - PR外への影響: 影響範囲と影響（無ければ「なし」）
-  - Verification: 検証コマンド（build/test）。無ければ /goal:exec は停止する。共通の build/test が無い repo では「なし（または手レビュー）」と明記可。
+  - Verification: 検証コマンド（build/test）。無ければ /goal:exec-v5 は停止する。共通の build/test が無い repo では「なし（または手レビュー）」と明記可。
   - その他共有事項:
 
-### tasks.json 追加出力（可視化の公開API・`docs/viz/SCHEMA.md` 準拠）
-
-`docs/plans/$ARGUMENTS.md` を書き出すのと同時に、実行計画のタスク群を機械可読な DAG として `docs/plans/$ARGUMENTS.tasks.json` にも Write する（**追加出力のみ。`.md` の構造・内容は一切変えない**）。スキーマは `docs/viz/SCHEMA.md` の tasks.json 定義に厳密に従う:
-
-- `tasks[].id` = 実行計画の `- [ ] task-N` の `task-N` と完全一致（安定ID。exec-v4 が `-o`/branch/verify に貫通させる canonical id）。
-- `tasks[].label` = タスクの短い名前。`tasks[].targets` = 当該タスクの「操作対象」ファイルの相対パス配列。
-- `tasks[].deps` = 当該タスクが依存する他タスクの `id` 配列（PR/スコープ設計と実行順から導出。独立なら `[]`）。
-- `tasks[].tier` = exec-v4 §5 の Tier 判定（`A`|`B`|`C`。判断材料が無ければ `A`）。`tasks[].lane` = v1 は `null`（直列）。
-- `edges` = `deps` から導出する冗長表現（task B が `deps:[A]` なら `{from:A, to:B}`）。
-- `planSlug` = `$ARGUMENTS` の slug、`generatedAt` = 生成時刻（ISO8601）。
-
-出力後の停止条件と `.md` の扱いは不変（`tasks.json` は任意の追加成果物で、可視化スキルが消費する。exec-v4 は不在時 散文から fallback）。
-
-最後に「plan.md を確認・編集のうえ /goal:exec を実行してください」と伝えて停止する。
+最後に「plan.md を確認・編集のうえ /goal:exec-v5 を実行してください」と伝えて停止する。
 
 ## フォールバック
-Workflowが利用不可/失敗した場合は、従来どおり調査を sonnet 4.6 のsub-agentに
+Workflowが利用不可/失敗した場合は、従来どおり調査を Sonnet（CLAUDE.md モデル台帳の worker/verifier モデル）の sub-agent に
 並列・read-onlyで委譲（または自分で調査）して計画を作る。停止条件・出力構造は不変。

@@ -8,6 +8,8 @@ description: 実装済みブランチを /check → push → PR 作成（or 反�
 フェーズ作業をクローズするための定型作業を固定化する。
 **修正の採否はユーザー承認**を必ず挟む（自動コミット禁止）。
 
+> 棲み分け: 自律実装は `/goal:exec-v5`（正本）が担い、そのまま draft PR まで無人で自走する。phase-* は人間駆動の手動フェーズ運用トラックであり、phase-ship はそのトラックの ship（クローズ）工程を担う。
+
 ## 設定読み取り（先頭で一度だけ）
 
 CLAUDE.md は自動ロードされている。文脈中の `## Skills config` 見出し直下の最初の ```yaml フェンス内 YAML を参照して以下を確定する。
@@ -58,7 +60,7 @@ config ブロック自体が無い PJ では、上記既定値で動作する旨
 
 ### Step 5. レビュー & 修正（`--skip-review` でない場合）
 
-`/phase-review --pr <番号> --fix` を起動して結果を待つ。
+`/phase-review --fix` を起動して結果を待つ。**`--pr` は渡さない**（ship は既に head ブランチに居るため PR 番号は不要。phase-review は `--pr` + `--fix` の同時指定を禁止しており、渡すと phase-review が即中断する）。phase-review は内部で `phase.review_cmd`（既定 `/code-review`）を起動する。
 
 `/phase-review --fix` が内部で次を完結させる:
 - 並列レビュー → 統合 → TaskCreate 採否提案 → ユーザー承認 → Edit 修正 → tasks 更新（hook 必要時のみ）→ `/check` → コミット

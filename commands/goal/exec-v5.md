@@ -1,5 +1,5 @@
 ---
-description: 承認済みplan.mdを唯一の真実として、Claude Code 一本化（codex 全廃・1タスク=1 fresh subagent）で実装し、orchestrator(Fable 5)が実態検証する。/loop から自走起動し draft PR 作成まで無人で終端する controller。
+description: 承認済みplan.mdを唯一の真実として、Claude 一本化（1タスク=1 fresh subagent）で実装し、orchestrator（セッションモデル）が実態検証する。/loop から自走起動し draft PR 作成まで無人で終端する唯一の exec 正本。
 argument-hint: docs/plans/<goal-slug>.md
 allowed-tools: Read, Grep, Glob, Write, Edit, Agent, Workflow, TaskOutput, TaskGet, ToolSearch, Bash(git diff:*), Bash(git status:*), Bash(git add:*), Bash(git commit:*), Bash(git rev-parse:*), Bash(git log:*), Bash(git show:*), Bash(git worktree:*), Bash(git switch:*), Bash(git checkout:*), Bash(git merge:*), Bash(git revert:*), Bash(git branch:*), Bash(git push:*), Bash(gh pr create:*), Bash(mkdir:*), Bash(touch:*), Bash(npm:*), Bash(node:*)
 ---
@@ -7,14 +7,14 @@ allowed-tools: Read, Grep, Glob, Write, Edit, Agent, Workflow, TaskOutput, TaskG
 **自分でプロダクションコードを編集してはいけません。** 編集はすべて **1タスク = 1 fresh subagent**（`Agent` tool）に委譲します。
 あなたの責務は「指示の明確化」「subagent 委譲」「実態の検証」「v5制御（Tier/並列/バリア/loop/ledger/コスト）」「draft PR 終端」です。
 
-これは v4 の `/goal:exec-v4`（codex 委譲）を**置き換えず**、その §1-13 制御フレームを内包したうえで、実装層を codex から Claude の fresh subagent に差し替えた controller です。veto された `commands/goal/exec.md`(v3) と `commands/goal/exec-v4.md` は一切編集しません。`/loop` から fire される想定（後述 §10）。
+これが唯一の exec 正本です（旧 v3/v4 は codex 全廃に伴い `archive/goal-commands/` へ退役）。v4 の制御フレーム（§1-13）を内包し、実装層を `Agent` の fresh subagent が担う。`/loop` から fire される想定（後述 §10）。
 
-**v4 からの本質的差分（codex 全廃の核心）**: codex exec は harness が完了通知を保証できない唯一の外部プロセスで、無限 hang を `hooks/codex-exec-guard.sh` の wall-clock 有界化で抑える必要があった。`Agent` / `Workflow` は harness 管理で、完了時に orchestrator が必ず再起動される（完了通知 = primary wake が保証される）。よって v5 では**ハングというクラス自体が消える**。さらに 1タスク = 1 fresh subagent なので、長期タスクでコンテキストが膨らんで後半で潰れる失敗モードも起きない（毎タスク新鮮なコンテキストで始まる）。
+**設計の核心（Claude 一本化の帰結）**: `Agent`/`Workflow` は harness 管理で完了時に orchestrator が必ず再起動される（完了通知 = primary wake 保証）＝**ハングというクラスが構造的に消える**。かつ 1タスク = 1 fresh subagent なので、長期タスクの後半潰れ（コンテキスト肥大）も起きない。
 
 ## 1. 唯一の真実
 @$ARGUMENTS ← このplan.mdの内容だけが正。記載外の実装・リファクタ・追加調査・仕様変更はしない。
 
-**tasks.json による安定タスクID（任意・後方互換）**: `$ARGUMENTS` の `.md` を `.tasks.json` に置換したパス（`docs/plans/<slug>.tasks.json`）が存在すれば `Read` し、その `tasks[].id` を当該タスクの **canonical task-id** として使う。すなわち subagent 成果サマリの出力先 `.codex-out/<id>.md`・branch `goalflow/<run-id>/<id>`・検証 Workflow の `args.taskId` に、tasks.json と同じ `id` を貫通させる。スキーマは `docs/viz/SCHEMA.md` の tasks.json 定義に従う。**tasks.json が不在のときは従来どおり plan.md 散文の `- [ ] task-N` から task-id を導出する（fallback。挙動は不変）**。これは可視化（taskflow-live-visualizer）の fusion 層が 3 観測 seam（`.codex-out` / git commit / verify journal）を `id` で突合するための最小協力。
+**task-id**: plan.md 散文の `- [ ] task-N` から task-id を導出する（`task-1`, `task-2`, …）。この id を subagent 成果サマリの出力先 `.goalflow/out/<task-id>.md`・branch `goalflow/<run-id>/<task-id>`・検証 Workflow の `args.taskId` に貫通させる。
 
 ## 2. permission / security ポリシー（最重要・ユーザ確定）
 - **worktree 操作は全許可**（`git worktree add` / `remove` 含む）。
@@ -31,13 +31,13 @@ allowed-tools: Read, Grep, Glob, Write, Edit, Agent, Workflow, TaskOutput, TaskG
 ### (a) 実行前指示の明確化
 plan.md の当該タスクから4項目を確定して宣言する: 操作対象 / 操作内容 / 影響場所と効果 / goalへの影響。
 ### (b) fresh subagent による実行（1タスク = 1 subagent）
-codex exec を**使わない**。`Agent` tool で write-capable な fresh subagent を1つ spawn し、当該タスクだけを実装させる:
+`Agent` tool で write-capable な fresh subagent を1つ spawn し、当該タスクだけを実装させる:
 
 - `Agent(subagent_type: 'general-purpose', description: "<task-id> 実装", prompt: <下記>)`
 - prompt は (a) の4項目 ＋ 対象ファイルの絶対パス ＋ 完了条件を明記し、末尾に必ず次を含める:
-  「実装が終わったら、変更内容の要約（何をどう変えたか・対象ファイル）を `.codex-out/<task-id>.md` に Write せよ。プロダクションコードの編集はこの1タスクの対象ファイルに限定し、commit はするな（commit は orchestrator が行う）。」
+  「実装が終わったら、変更内容の要約（何をどう変えたか・対象ファイル）を `.goalflow/out/<task-id>.md` に Write せよ。プロダクションコードの編集はこの1タスクの対象ファイルに限定し、commit はするな（commit は orchestrator が行う）。」
 - **不変条件**: **1 attempt = 1 subagent**。同一タスクの再試行は新しい subagent を spawn する（前の subagent のコンテキストを持ち越さない＝後半潰れを構造的に防ぐ）。並列時も各 worktree で 1 subagent（§6）。
-- subagent は harness 管理。完了で orchestrator が再起動される（primary wake）。**ledger は subagent に書かせない**（§8。書くのは `.codex-out/<task-id>.md` のみ）。
+- subagent は harness 管理。完了で orchestrator が再起動される（primary wake）。**ledger は subagent に書かせない**（§8。書くのは `.goalflow/out/<task-id>.md` のみ）。
 ### (c) 実態検証（§4 の commit-before-verify を経て検証Workflow → orchestrator 最終判定）
 
 ## 4. commit-before-verify 規律 ＋ baseCommit 注入（verify 構造解の前提）
@@ -46,16 +46,16 @@ verify の構造解（`goal-exec-verify.workflow.js` の baseCommit baseline）�
 2. subagent 完了後、**当該タスクの成果を orchestrator が per-task でコミット**（diff をクリーンに保つ。commit はタスク単位）。
 3. verify Workflow 起動時、args に **`baseCommit` を渡し**、`diffText` は `git diff <baseCommit>..HEAD -- <対象ファイル>` でスコープして渡す。
    - これにより verifier は**真の task 差分のみ**を根拠に判定できる（直列・並列とも）。
-   - **`codexSummary` 引数は無改修流用**: subagent が `.codex-out/<task-id>.md` に書いた自己申告サマリを `codexSummary` に渡す（workflow は `a.codexSummary || ''` で undefined 安全・VERDICT 算出に不関与・参考注入のみ。意味は「実装者の自己申告サマリ」として再解釈。引数名は据置で v3/v4 後方互換を一切壊さない）。
+   - **`implementerSummary`（実装者の自己申告サマリ）**: subagent が `.goalflow/out/<task-id>.md` に書いた要約を渡す（workflow は VERDICT 算出に不関与・参考注入のみ。旧 `codexSummary` 引数名も workflow 側で後方互換に受理される）。
 
 検証Workflow:
 
     Workflow: scriptPath /Users/ooizumiyou/.claude/workflows/goal-exec-verify.workflow.js
       args: { taskId, targets:[対象ファイル], planExcerpt:<当該タスクのplan設計4項目>,
               diffText:<git diff baseCommit..HEAD -- 対象ファイル>, baseCommit:<上記SHA>,
-              codexSummary:<.codex-out/<task-id>.md 要約>, cwd:<絶対パス> }
+              implementerSummary:<.goalflow/out/<task-id>.md 要約>, cwd:<絶対パス> }
 
-**最終判定は orchestrator(Fable 5) 自身**。verdicts を踏まえ自分でも `git diff baseCommit..HEAD` と対象ファイルを読み採否を決める。consensusMatch=false / high severity 乖離があれば (b) へ差し戻し（新しい subagent を spawn）。
+**最終判定は orchestrator（セッションモデル）自身**。verdicts を踏まえ自分でも `git diff baseCommit..HEAD` と対象ファイルを読み採否を決める。consensusMatch=false / high severity 乖離があれば (b) へ差し戻し（新しい subagent を spawn）。
 
 ## 5. Tier 勾配
 - **Tier A** = フル3レンズ verify Workflow + orchestrator 判定。
@@ -87,7 +87,6 @@ verify の構造解（`goal-exec-verify.workflow.js` の baseCommit baseline）�
 - **書き手は orchestrator 単独**（唯一 race-free）。subagent には ledger を書かせない（subagent が isolation:worktree で走ると ledger 書込が worktree コピーに落ち cleanup で消失するため構造的に不可）。harness が「各 subagent / Workflow の完了通知ごとに orchestrator を再起動する」性質が、並列バッチでも単一書込点を自然に与える。
 - **状態遷移**: `created → running → committed → verified → aboutToMerge → merged → integrationOk → cleaned`（分岐 `failed` / `rolledBack`）。
 - **write point**（各 seam の直後に orchestrator が書く）: subagent 完了通知（running）/ per-task commit（committed）/ verify 完了（verified | failed）/ merge（aboutToMerge → merged）/ 統合チェック（integrationOk）/ worktree cleanup（cleaned）。
-- **viz 結線**: viz（goalflow-viz）は run-id を知らず tasks.json mtime を runWindow とする（fuse.mjs / SCHEMA §5）。**resume では tasks.json の mtime が更新されず旧 run の `.codex-out` 残骸を現 run と誤検知しうる**ため、resume 時は fuse を `--since=<ledger の startedAt ISO>` で起動する（または tasks.json を `touch` して mtime 更新）。これにより viz seam は無改修のまま resume でも正しい run window を見る。
 
 ## 9. loop-until-done
 全タスクが（直列 = 実態検証通過 / 独立バッチ = `merged ∧ integrationOk/cleaned`）になるまで主ループを回す。
