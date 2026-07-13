@@ -59,12 +59,12 @@ allowed-tools: Read, Grep, Glob, Bash(git log:*), Bash(git diff:*), Write, Workf
 - [ ] task-1
   - 操作対象:
   - target-files: [相対パス...]（**必須**。そのタスクが変更するファイルパス集合。バッチ間の互いに素判定に使う）
-  - depends-on: [task-id...]（**必須**。依存先 task-id。空配列 = 依存なし）
+  - depends-on: [task-id...]（**必須**。依存先 task-id。空配列 = 依存なし。既存 task-id のみ参照可・循環禁止）
   - 操作内容:
   - 影響場所と効果:
   - goalへの影響:
 
-  gitignored 等の非 git 管理 target を持つタスクには、depends-on の直後に `non-git: true` を必ず付す（commit/worktree/バリア対象外の直列扱いになる）。
+  gitignored 等の非 git 管理 target を持つタスクには、depends-on の直後に `non-git: true` を必ず付す（commit/worktree/バリア対象外の直列扱いになり、並列バッチには入れない）。非 git 管理 target を1つでも含むタスクに git 管理下の target-files を混在させてはならない（混在する場合はタスクを分割する）。
 ## 並列バッチ構成
 （depends-on / target-files から導出したトポロジカル層のバッチ表。初回並列 run の canary バッチを明示する。
 /goal:exec-v5 はフィールドから再導出して照合し、不一致なら停止する）

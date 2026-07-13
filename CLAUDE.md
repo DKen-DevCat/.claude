@@ -47,8 +47,8 @@ exec は単一タスク (a)明確化 →(b)実装 subagent →(c)検証 を基�
 
 - **2トラック**: `/loop`（interval 省略 = dynamic）が `/goal:exec-v5 <plan>` を fire して直列に自走する（subagent/verify の完了通知が primary wake、`ScheduleWakeup` は fallback heartbeat）。controller は独立バッチの worktree 並列と branch-merge バリアを担う。
 - **commit-before-verify ＋ baseCommit**: subagent spawn 直前に `git rev-parse HEAD` で baseCommit を取り、タスク成果を per-task でコミットしてから、verify に `baseCommit` と `git diff baseCommit..HEAD` を渡す。verifier は真の task 差分のみを根拠にする（自前 git・独自 baseline は workflow 側で封じる）。
-- **Tier 勾配（verify 深度専用）**: Tier A = フル3レンズ検証、B = build/test 軽ゲート + diff 精読、C = 統合チェックのみ。Tier は検証の深さのみを定め、**並列可否とは無関係**（並列可否は depends-on / target-files のみで判定・全 Tier が並列可 = exec-v5 §5）。
-- **独立バッチ並列 ＋ branch-merge バリア**: **並列が既定**（plan.md の depends-on / target-files から独立バッチ =「depends-on なし ∧ target-files 互いに素」を導出。Tier とは無関係）。独立バッチを worktree+branch に分離して並列実行し、verified branch を `merge --no-ff` で1つずつ統合して各回統合チェックする。失敗は `git revert` / worktree 破棄で戻す（履歴は改変しない）。初回並列 run は canary 受け入れ条件付きで、失敗時は直列降格する（exec-v5 §6・§6.1）。
+- **Tier 勾配（verify 深度専用）**: Tier A = フル3レンズ検証、B = build/test 軽ゲート + diff 精読、C = 統合チェックのみ。並列可否とは無関係（判定条件式は exec-v5 §5 を正とする）。
+- **独立バッチ並列 ＋ branch-merge バリア**: **並列が既定**。独立バッチは plan.md の依存フィールドから導出し（non-git タスクは除外・判定条件式と canary ゲート・直列降格は exec-v5 §6・§6.1 を正とする）、worktree+branch に分離して並列実行 → verified branch を `merge --no-ff` で1つずつ統合して各回統合チェック。失敗は `git revert` / worktree 破棄で戻す（履歴は改変しない）。
 - **loop-until-done**: 全タスク完了まで主ループを回す。終了保証 = maxAttempts / maxRounds / no-progress。
 - **ledger**: `.goalflow/state/<plan-slug>.json`（`.gitignore` 済・orchestrator 単独書込）で resume（exec-v5 §8）。
 - **コスト計測**: workflow journal の totalTokens ＋ 実装 subagent トークン ＋ session usage を read-only で集計する。
