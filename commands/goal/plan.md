@@ -40,6 +40,7 @@ allowed-tools: Read, Grep, Glob, Bash(git log:*), Bash(git diff:*), Write, Workf
      - dme③照合 → findings / critic との突き合わせ（「## 調査結果」のギャップの根拠付け）
    - goal到達に必要な要素を、タスクごとに4項目で書き出す:
      操作対象 / 操作内容 / 影響場所と効果 / goalへの影響
+   - dme には、**タスク間依存（depends-on）と target-files（そのタスクが変更するファイルパス集合）の抽出・宣言**を必須要求する。全タスクについて、依存先 task-id（無ければ空配列）と変更対象パスを漏れなく特定させる（/goal:exec-v5 の独立バッチ導出「depends-on なし ∧ target-files 互いに素」の判定材料になるため、省略不可）。gitignored 等の非 git 管理 target を持つタスクはその旨も特定させる。
 5. dme が出した ⚖️moat（判断が割れる分岐）は決めず「未確定・要判断事項」に選択肢として直列化する。ただし goal / 要件に効く高stakesの ⚖️ は、plan.md 確定前に `AskUserQuestion` で確認してから作文する（hybrid）。
 6. 実行計画を **PR / スコープ単位** に束ねる。この PR / スコープの分割は dme の「① どこを切るか」judgment そのものであり、手順4の `Skill(dme)` ループの産物として導く。分割候補が複数ある場合は手順4と同じペア比較トーナメントを回し、実行級の比較では champion を採用する。基準級の分岐では champion を強制せず、分割の根拠・代替案とともに ⚖️ で開示し、「未確定・要判断事項」へ直列化する。各 PR の **PR仕様** を設計する:
    目的 / 満たすべき要件 / 着手前の立ち位置・完了後の立ち位置 /
@@ -57,9 +58,19 @@ allowed-tools: Read, Grep, Glob, Bash(git log:*), Bash(git diff:*), Write, Workf
 ## 実行計画
 - [ ] task-1
   - 操作対象:
+  - target-files: [相対パス...]（**必須**。そのタスクが変更するファイルパス集合。バッチ間の互いに素判定に使う）
+  - depends-on: [task-id...]（**必須**。依存先 task-id。空配列 = 依存なし。既存 task-id のみ参照可・循環禁止）
   - 操作内容:
   - 影響場所と効果:
   - goalへの影響:
+
+  gitignored 等の非 git 管理 target を持つタスクには、depends-on の直後に `non-git: true` を必ず付す（commit/worktree/バリア対象外の直列扱いになり、並列バッチには入れない）。非 git 管理 target を1つでも含むタスクに git 管理下の target-files を混在させてはならない（混在する場合はタスクを分割する）。
+## 並列バッチ構成
+（depends-on / target-files から導出したトポロジカル層のバッチ表。初回並列 run の canary バッチを明示する。
+/goal:exec-v5 はフィールドから再導出して照合し、不一致なら停止する）
+
+| バッチ | タスク | 実行様式 | 根拠 |
+|---|---|---|---|
 ## 未確定・要判断事項
 ## PR仕様（PR / スコープごと。/goal:exec-v5 はこの仕様どおりに PR 本文を書く）
 - PR-1: <対象リポジトリ / スコープ>

@@ -1,7 +1,7 @@
 ---
 description: 承認済みplan.mdを唯一の真実として、Claude 一本化（1タスク=1 fresh subagent）で実装し、orchestrator（セッションモデル）が実態検証する。/loop から自走起動し draft PR 作成まで無人で終端する唯一の exec 正本。
 argument-hint: docs/plans/<goal-slug>.md
-allowed-tools: Read, Grep, Glob, Write, Edit, Agent, Workflow, TaskOutput, TaskGet, ToolSearch, Bash(git diff:*), Bash(git status:*), Bash(git add:*), Bash(git commit:*), Bash(git rev-parse:*), Bash(git log:*), Bash(git show:*), Bash(git worktree:*), Bash(git switch:*), Bash(git checkout:*), Bash(git merge:*), Bash(git revert:*), Bash(git branch:*), Bash(git push:*), Bash(gh pr create:*), Bash(mkdir:*), Bash(touch:*), Bash(npm:*), Bash(node:*)
+allowed-tools: Read, Grep, Glob, Write, Edit, Agent, Workflow, TaskOutput, TaskGet, ToolSearch, Bash(git diff:*), Bash(git status:*), Bash(git add:*), Bash(git commit:*), Bash(git rev-parse:*), Bash(git log:*), Bash(git show:*), Bash(git worktree:*), Bash(git -C:*), Bash(git switch:*), Bash(git checkout:*), Bash(git merge:*), Bash(git revert:*), Bash(git branch:*), Bash(git push:*), Bash(gh pr create:*), Bash(mkdir:*), Bash(touch:*), Bash(npm:*), Bash(node:*)
 ---
 あなたはオーケストレーター兼検証者です。ultrathinkで臨んでください。
 **自分でプロダクションコードを編集してはいけません。** 編集はすべて **1タスク = 1 fresh subagent**（`Agent` tool）に委譲します。
@@ -15,6 +15,12 @@ allowed-tools: Read, Grep, Glob, Write, Edit, Agent, Workflow, TaskOutput, TaskG
 @$ARGUMENTS ← このplan.mdの内容だけが正。記載外の実装・リファクタ・追加調査・仕様変更はしない。
 
 **task-id**: plan.md 散文の `- [ ] task-N` から task-id を導出する（`task-1`, `task-2`, …）。この id を subagent 成果サマリの出力先 `.goalflow/out/<task-id>.md`・branch `goalflow/<run-id>/<task-id>`・検証 Workflow の `args.taskId` に貫通させる。
+
+**依存構造の読み取り（並列判定材料）**: plan.md の各タスクから `depends-on: [task-id...]`（空 = 依存なし）・`target-files: [パス...]`・`non-git: true`（gitignored 等の非 git 管理 target を持つタスクの印）と、`## 並列バッチ構成` セクションを読み取る。**exec は depends-on / target-files からバッチを自ら再導出し、plan の `## 並列バッチ構成` と照合する。不一致なら停止**する（plan 側の導出を無検証で実行しない）。再導出時、`non-git: true` のタスクは独立バッチから**除外**し常に直列（§4.3）とする。depends-on グラフに**循環**または**存在しない task-id への参照**を検出した場合も、不一致時と同様に停止する（トポロジカルソートが層を確定できないまま実行しない）。
+
+**後方互換**: これらフィールドを持たない既存 plan.md は**全タスク直列依存**（前タスク完了後に次タスク）とみなし、直列パス（§3）で完走する（§13 にも同旨）。
+
+**exec 開始時の受け入れ条件（live schema 再確認）**: exec 開始時、orchestrator は `Agent` / `Workflow` の **live schema**（実行環境が現に提示する tool 定義）で、本コマンドが依存する引数（`run_in_background` 等）の実在を再確認する。静的宣言（sdk-tools.d.ts 等）と実行バイナリのバージョン乖離があり得るため、静的宣言を根拠にしない（乖離時は §13 直列フォールバック）。
 
 ## 2. permission / security ポリシー（最重要・ユーザ確定）
 - **worktree 操作は全許可**（`git worktree add` / `remove` 含む）。
@@ -41,34 +47,76 @@ plan.md の当該タスクから4項目を確定して宣言する: 操作対象
 ### (c) 実態検証（§4 の commit-before-verify を経て検証Workflow → orchestrator 最終判定）
 
 ## 4. commit-before-verify 規律 ＋ baseCommit 注入（verify 構造解の前提）
-verify の構造解（`goal-exec-verify.workflow.js` の baseCommit baseline）を成立させるため、controller が **commit 規律と baseCommit の渡し手**を持つ:
+verify の構造解（`goal-exec-verify.workflow.js` の baseCommit baseline）を成立させるため、controller が **commit 規律と baseCommit の渡し手**を持つ。規律は**直列 / 並列の二相**で書き分ける（目的は共通: verifier に「真の task 差分のみ」を根拠として渡す）。
+
+### 4.1 直列時（§3 直列パス）
 1. subagent spawn の**直前**に `git rev-parse HEAD` で `baseCommit` を取得・記録（ledger にも）。
 2. subagent 完了後、**当該タスクの成果を orchestrator が per-task でコミット**（diff をクリーンに保つ。commit はタスク単位）。
-3. verify Workflow 起動時、args に **`baseCommit` を渡し**、`diffText` は `git diff <baseCommit>..HEAD -- <対象ファイル>` でスコープして渡す。
-   - これにより verifier は**真の task 差分のみ**を根拠に判定できる（直列・並列とも）。
-   - **`implementerSummary`（実装者の自己申告サマリ）**: subagent が `.goalflow/out/<task-id>.md` に書いた要約を渡す（workflow は VERDICT 算出に不関与・参考注入のみ。旧 `codexSummary` 引数名も workflow 側で後方互換に受理される）。
+3. verify Workflow 起動時、args に **`baseCommit` を渡し**、`diffText` は `git diff <baseCommit>..HEAD -- <対象ファイル>` でスコープして渡す。`cwd` は main checkout の絶対パス。
+
+### 4.2 並列時（§6 worktree バッチ）
+1. **baseCommit = worktree add 時点の統合 branch HEAD**。バッチ内の全 worktree で共通であり、orchestrator が `git worktree add <path> -b <branch> <baseCommit>` の引数に**明示指定した SHA そのもの**を用いる（＝一次情報。定義と伝播規約は §8「worktreePath の伝播規約」を正とする）。
+2. subagent 完了後、per-task commit は **orchestrator が worktree に向けて** `git -C <worktreePath> add <target-files>... && git -C <worktreePath> commit -m "<task-id>: <一言サマリ>"` で行う（**`-m` 必須**＝editor 起動待ちで自律ループを止めない。add 対象は当該タスクの target-files のみ＝§6.1 条件3 の書込封じ込めと整合）。
+3. verify への注入:
+   - `diffText = git -C <worktreePath> diff <baseCommit>..HEAD -- <targets>`
+   - `cwd = <worktreePath>`（worktree の絶対パス）
+   - **`targets` は worktree 起点の絶対パス**で渡す（`<worktreePath>/…`）。`goal-exec-verify.workflow.js` は cwd 起点の絶対パス正規化ガードを持つが、**呼び出し側も絶対パスで渡すのを規律とする**（ガードに依存しない）。
+   - これにより verifier は並列時も**当該 worktree 上の真の task 差分のみ**を根拠に判定できる（workflow の lockdown 契約＝自前 git・独自 baseline の封じは無改修で維持）。
+
+### 4.3 non-git タスク（両相共通の例外）
+plan で `non-git: true` が付いたタスク（gitignored 等の非 git 管理 target）は **`baseCommit = null`・worktree / branch-merge バリア不適用の直列扱い**とする: main checkout 上で直接 fs 編集し、commit はせず、**orchestrator が変更内容（対象ファイルの実体）を直接確認**して採否を決める（diff baseline が存在しないため §4.1/4.2 の diffText 注入は行わない）。**機密ガード**: 機密になり得るパスパターン（`.env*`・`*secret*`・`*credential*`・`*.pem`・`*token*` 等）を non-git target-files として許可しない（該当したら plan 側の設計を見直す hard-stop）。
+
+### 4.4 共通（implementerSummary・検証Workflow・最終判定）
+- **`implementerSummary`（実装者の自己申告サマリ）**: subagent が `.goalflow/out/<task-id>.md` に書いた要約を渡す（workflow は VERDICT 算出に不関与・参考注入のみ。旧 `codexSummary` 引数名も workflow 側で後方互換に受理される）。
 
 検証Workflow:
 
     Workflow: scriptPath /Users/ooizumiyou/.claude/workflows/goal-exec-verify.workflow.js
-      args: { taskId, targets:[対象ファイル], planExcerpt:<当該タスクのplan設計4項目>,
-              diffText:<git diff baseCommit..HEAD -- 対象ファイル>, baseCommit:<上記SHA>,
-              implementerSummary:<.goalflow/out/<task-id>.md 要約>, cwd:<絶対パス> }
+      args: { taskId, targets:[対象ファイルの絶対パス（並列時は worktree 起点）], planExcerpt:<当該タスクのplan設計4項目>,
+              diffText:<§4.1 直列 = git diff baseCommit..HEAD -- targets / §4.2 並列 = git -C worktreePath diff baseCommit..HEAD -- targets>,
+              baseCommit:<上記SHA>, implementerSummary:<.goalflow/out/<task-id>.md 要約>,
+              cwd:<直列 = main checkout / 並列 = worktreePath の絶対パス> }
 
-**最終判定は orchestrator（セッションモデル）自身**。verdicts を踏まえ自分でも `git diff baseCommit..HEAD` と対象ファイルを読み採否を決める。consensusMatch=false / high severity 乖離があれば (b) へ差し戻し（新しい subagent を spawn）。
+この呼び出し例を targets / diffText / cwd 契約の**唯一の正**とする（§4.1/§4.2 の記載は手順文脈での要約であり、契約変更時はここだけを更新して両相を追従させる）。
 
-## 5. Tier 勾配
+**最終判定は orchestrator（セッションモデル）自身**。verdicts を踏まえ自分でも同じ diff（直列 = `git diff baseCommit..HEAD` / 並列 = `git -C <worktreePath> diff baseCommit..HEAD`）と対象ファイルを読み採否を決める。consensusMatch=false / high severity 乖離があれば (b) へ差し戻し（新しい subagent を spawn）。
+
+## 5. Tier 勾配（verify 深度専用）
+Tier は**検証の深さのみ**を定める。**並列可否とは無関係**——並列可否は「**`depends-on` なし ∧ `target-files` 互いに素 ∧ non-git でない**」のみで判定し、**全 Tier が並列可**（§6）。
 - **Tier A** = フル3レンズ verify Workflow + orchestrator 判定。
 - **Tier B** = plan の Verification（build/test）軽ゲート + orchestrator diff 精読。
 - **Tier C** = Verification + branch-merge 統合チェックのみ。
-- 判定は plan のタスク種別・リスク・テスト被覆から **orchestrator** が行う。初回でも「対象ファイルが互いに素 ∧ 依存宣言なし ∧ テスト被覆のある低リスク変更」は Tier B/C と自然判定して独立バッチ並列を発火してよい。`.claude/tier-policy.md` があれば人間承認済み格下げとして尊重するが、無くても初回から判定可能。
+- Tier（verify 深度）の判定は plan のタスク種別・リスク・テスト被覆から **orchestrator** が行う。`.claude/tier-policy.md` があれば人間承認済み格下げ（Tier＝verify 深度の判定用）として尊重するが、無くても初回から判定可能。
 
-## 6. 独立バッチ並列（worktree）【候補機構・dogfood で要検証】
-独立バッチ（**target 互いに素 ∧ 依存宣言なし ∧ Tier B/C**）を `git worktree add` で各タスク用の worktree + branch（命名 `goalflow/<run-id>/<task-id>`）に分離し、各 worktree で fresh subagent を実行して並列化する。
+## 6. 独立バッチ並列（worktree・並列が既定）
+**並列が既定**である。独立バッチ（**`depends-on` なし ∧ `target-files` 互いに素 ∧ `non-git: true` でない**（non-git タスクは §4.3 の直列固定）。Tier は不問 §5）を worktree + branch に分離して並列実行し、依存のある部分だけ直列（§3）で実行する。初回並列 run は canary 規律（§6.1）のゲートを通す。
 
-候補機構: `Agent(subagent_type:'general-purpose', run_in_background: true, isolation: 'worktree', ...)` で各 worktree に pin した subagent を並列 spawn し、完了通知で待ち合わせる。これら arg（`run_in_background` / `isolation:'worktree'` / `model`）の**実在は orchestrator の live schema で確認済み**。
+**worktree 生成は orchestrator 主導が唯一の経路**:
 
-> **⚠️ 要検証（dogfood で確定）**: arg の実在は確定だが、**worktree 隔離下での write の着地・並列発火と待ち合わせ・branch-merge バリアとの結線の end-to-end は未実証**。**この並列機構が初回 dogfood で実機検証されるまでは、直列フォールバック（1タスクずつ §3）で安全に動かす**こと。並列は「検証済みになってから有効化する」。`1 attempt = 1 subagent` の不変条件は並列時も維持。未実証機構を確定機構として扱わない。
+    git worktree add <path> -b goalflow/<run-id>/<task-id> <baseCommit>
+
+（`Agent(isolation:'worktree')` は**不採用**: branch 命名の引数がなく `goalflow/<run-id>/<task-id>` 命名が原理的に不可能・AgentOutput が worktreePath を返さず orchestrator が位置を知る手段がない・全環境・全履歴で実行実績ゼロ・baseRef の実挙動が未確定。orchestrator が worktree のパスと branch を自らの `git worktree add` 引数で握れる本経路に一本化する。一次情報の定義と伝播は §8 を正とする。）
+
+実装 subagent は**通常 spawn（`run_in_background: true`）**で並列起動する:
+- prompt に **worktree の絶対パス**を明記し、全 Read/Edit をその配下に限定させる。
+- prompt 末尾に必ず次を含める: 「`git rev-parse --show-toplevel && git branch --show-current` の結果を `.goalflow/out/<task-id>.md` の冒頭へ自己申告として記載せよ」（orchestrator は worktree add 引数の一次情報と照合する）。
+- **1 attempt = 1 subagent** の不変条件は並列時も維持（各 worktree で 1 subagent）。完了は harness の完了通知で待ち合わせる。
+- **差し戻し（再試行）時の worktree/branch 規約**: 失敗 attempt の worktree は `git worktree remove` で破棄し、**新規 attempt ごとに attempt 番号付きの新 branch + 新 worktree を切り直す**（`git worktree add <新path> -b goalflow/<run-id>/<task-id>-a<attempt番号> <baseCommit>`。同名 branch への `-b` 再指定はエラーになり、失敗 attempt の残骸を引き継ぐと §4.2 の「真の task 差分のみ」が壊れるため）。旧 branch は放置してよい（`branch -D` は §2 で禁止）。ledger の `branch` / `worktreePath` は新 attempt の値で更新する。
+
+### 6.1 canary 規律（初回並列 run のゲート）
+**初回並列 run の最初の独立バッチを canary** とし、次の受け入れ条件を全て観察する:
+1. worktree add 成功・ledger 記録。
+2. 並列 spawn 全員の完了通知受領。
+3. **書込封じ込め**: `git -C <worktreePath> status --porcelain` の変更が当該タスクの target-files 内のみ ∧ main checkout に予期せぬ変更なし。
+4. 近接完了後の ledger JSON 整合。
+5. per-branch diff で verify 通過。
+6. バリア merge ＋ 統合チェック通過（§7）。
+
+- **全通過** → 残バッチを全面並列で実行する。
+- **1つでも失敗** → 当該 run は**直列降格**（§13）し、失敗様態を ledger に記録して続行する。
+- **降格前クリーンアップ（条件3破れの場合に必須）**: `git status --porcelain` で main checkout 上の予期せぬ変更を特定し、未コミット分は `git checkout -- <file>` で破棄、コミット済みなら `git revert` で切り離してから、**直列パスの baseCommit を再取得**する（汚染を含んだ HEAD を baseline にしない。`reset --hard` は使わない）。
+
+worktree 隔離下での subagent write の着地・並列発火と待ち合わせ・branch-merge バリアとの結線の end-to-end は、**canary（上記1〜6）で実証するまでは実証済みとして扱わず、canary 通過をもって実証済みとする**。
 
 ## 7. branch-merge バリア（直列統合）
 各 worktree で verified になった branch を、統合先（base or 統合 branch）へ **`git merge --no-ff` で1つずつ**統合する:
@@ -84,7 +132,14 @@ verify の構造解（`goal-exec-verify.workflow.js` の baseCommit baseline）�
 
 - **置き場所**: `.goalflow/state/<plan-slug>.json`（`.goalflow/` は `.gitignore` 済み＝PR diff に入らない）。
 - **run-id**: `<plan-slug>-r<連番>`。ledger 内の field として持つ。**再 /loop は同じ `<plan-slug>.json` を slug で引き、未完タスクから resume する**（決定論的に同一 ledger に収束。日付+SHA 採番は resume を壊すため使わない）。新規 run のみ連番を increment する。`startedAt`（ISO8601）を記録。
-- **書き手は orchestrator 単独**（唯一 race-free）。subagent には ledger を書かせない（subagent が isolation:worktree で走ると ledger 書込が worktree コピーに落ち cleanup で消失するため構造的に不可）。harness が「各 subagent / Workflow の完了通知ごとに orchestrator を再起動する」性質が、並列バッチでも単一書込点を自然に与える。
+- **書き手は orchestrator 単独**。subagent には ledger を書かせない（並列時の subagent は worktree 配下で走るため、ledger 書込が worktree コピーへ落ち cleanup で消失し得る＝構造的に不可）。harness が「各 subagent / Workflow の完了通知ごとに orchestrator を再起動する」性質が、並列バッチでも単一書込点を自然に与える。race-free は「単一書込点 ＋ canary 条件4（§6.1）で近接完了時の ledger JSON 整合を実地観察する」ことで担保する確度であり、機構だけで無条件に保証済みとは扱わない。
+- **per-task schema（並列拡張）**: 現状ベースライン＝現行実装の実フィールド `{state, tier, baseCommit, headCommit, note?}`。並列 run ではこれを次で拡張する:
+  - `worktreePath`: 当該タスクの worktree 絶対パス（直列＝統合 branch 上の実行時はその checkout パス。non-git は `null`）。
+  - `branch`: 当該タスクの branch 名（`goalflow/<run-id>/<task-id>`。統合 branch 上の直列時は統合 branch 名。non-git は `null`）。
+  - `batch`: 所属バッチ ID（並列バッチ / 直列バッチの別を含むバッチ単位の追跡キー）。
+  - `nonGit`: `true` のとき §4.3 の non-git タスク（`baseCommit = null`・worktree / バリア不適用）。
+  この4フィールドにより、並列 run の resume・cleanup・監査が ledger だけで再構成可能になる。
+- **worktreePath の伝播規約（単一の規約）**: worktreePath の情報源は **orchestrator 自身が実行した `git worktree add <path> -b <branch> <baseCommit>` の引数（§6）＝自己申告に依存しない一次情報**である。これを **①取得 → ②ledger 保持（上記 `worktreePath` / `branch`）→ ③per-task commit（§4.2 の `git -C <worktreePath>`）・verify の cwd 注入（§4.2 の `cwd = <worktreePath>`）・cleanup（§7 の `git worktree remove <worktreePath>`）への伝播**、という一方向の流れで一貫して用いる。subagent が `.goalflow/out/<task-id>.md` 冒頭に書く `git rev-parse --show-toplevel` 等の自己申告（§6）は**照合用**であり、伝播の情報源にはしない。
 - **状態遷移**: `created → running → committed → verified → aboutToMerge → merged → integrationOk → cleaned`（分岐 `failed` / `rolledBack`）。
 - **write point**（各 seam の直後に orchestrator が書く）: subagent 完了通知（running）/ per-task commit（committed）/ verify 完了（verified | failed）/ merge（aboutToMerge → merged）/ 統合チェック（integrationOk）/ worktree cleanup（cleaned）。
 
@@ -123,5 +178,6 @@ v5 の self-driving は `/loop` がホストする:
 
 ## 13. フォールバック
 - 検証Workflow が利用不可/失敗なら、orchestrator 自身が `git diff <baseCommit>..HEAD` と対象ファイルを読んで plan 設計と照合（判定基準・差し戻し手順は不変）。
-- 並列機構（§6）が未検証/不可なら**直列フォールバック**で安全に完走する。
-- `Agent` の arg（run_in_background / isolation:worktree 等）が期待どおり動かない場合も、直列の前景 subagent ＋ orchestrator commit で完走する（実装層は subagent のままで codex には戻さない）。
+- **後方互換（§1 と同旨）**: depends-on / target-files フィールドを持たない既存 plan.md は**全タスク直列依存**とみなし、直列パス（§3）で完走する。
+- **直列降格**: canary（§6.1）の受け入れ条件が1つでも失敗した run は、直列（1タスクずつ §3）へ降格し、失敗様態を ledger に記録して完走する（条件3破れの場合は §6.1 の降格前クリーンアップを必ず先行させる）。
+- `Agent` の arg（`run_in_background` 等）が live schema 再確認（§1）で実在しない/期待どおり動かない場合も、直列の前景 subagent ＋ orchestrator commit で完走する（実装層は subagent のままで codex には戻さない）。

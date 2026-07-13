@@ -14,11 +14,24 @@ if (typeof a === 'string') {
   try { a = JSON.parse(a) } catch (e) { a = {} }
 }
 const taskId = a.taskId || 'task'
-const targets = Array.isArray(a.targets) ? a.targets : []
 const planExcerpt = a.planExcerpt || ''
 const diffText = a.diffText || '(diff未提供。対象ファイルと plan 設計の整合のみ見よ。pre-existing/未コミット差分を副作用と見なすな)'
 const implementerSummary = a.implementerSummary || a.codexSummary || ''
+// cwd 契約: 並列実行時は worktree の絶対パス（例: ~/.claude/.goalflow/worktrees/r1/task-N）が渡り得る。
+// verifier は cwd 起点で targets を Read するため、相対 targets はここで cwd 起点の絶対パスへ正規化する。
+// workflow サンドボックスでは path モジュール等の require が使えないため、純粋な文字列操作で判定・結合する。
 const cwd = a.cwd || '.'
+const rawTargets = Array.isArray(a.targets) ? a.targets : []
+const targets = rawTargets.map((p) => {
+  if (typeof p !== 'string' || p.startsWith('/')) return p
+  if (!cwd.startsWith('/')) {
+    throw new Error(
+      `goal-exec-verify: 相対パスの target "${p}" を受領したが cwd が絶対パスで未指定（cwd="${cwd}"）。` +
+        '並列 worktree 下で誤ファイルを Read する恐れがあるため続行しない。cwd に worktree の絶対パスを渡すこと。'
+    )
+  }
+  return cwd.replace(/\/$/, '') + '/' + p
+})
 const baseCommit = a.baseCommit || ''
 const lockdown =
   'あなたは git を自前実行してはならない（git diff/status/log/show/--name-only を自分で叩くな）。' +
