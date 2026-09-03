@@ -16,10 +16,13 @@ downloads/
 jobs/
 .last-cleanup
 .last-update-result.json
+daemon-auth-cooldown
+daemon-auth-status.json
+daemon.lock
+daemon.status.json
+gh-pr-status-cache.json
+image-cache/
 __pycache__/
-
-# skill-workspace scratch (eval 反復の中間生成物)
-skills/dme-workspace/desc_iter*.txt
 
 # logs / sessions / plans (auto-generated)
 history.jsonl
@@ -30,8 +33,6 @@ projects/
 # state
 todos/
 tasks/
-.goalflow/
-.codex-out/
 
 # telemetry / auth
 statsig/
