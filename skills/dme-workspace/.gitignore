@@ -1,4 +1,0 @@
-# eval 実行結果（出力アーティファクト。計器本体だけ追跡する）
-behavior_result*.json
-trigger_result*.json
-*.out

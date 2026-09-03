@@ -28,16 +28,24 @@
       "/Users/ooizumiyou/nestify-ide"
     ]
   },
-  "model": "claude-fable-5[1m]",
+  "model": "claude-fable-5-1[1m]",
   "enabledPlugins": {
     "typescript-lsp@claude-plugins-official": true,
     "gopls-lsp@claude-plugins-official": true,
     "notion@claude-plugins-official": true,
     "stripe@claude-plugins-official": true,
-    "skill-creator@claude-plugins-official": true
+    "cloudflare@cloudflare": true
+  },
+  "extraKnownMarketplaces": {
+    "cloudflare": {
+      "source": {
+        "source": "github",
+        "repo": "cloudflare/skills"
+      }
+    }
   },
   "effortLevel": "xhigh",
   "tui": "fullscreen",
-  "skipWorkflowUsageWarning": true,
-  "editorMode": "vim"
+  "editorMode": "vim",
+  "agentPushNotifEnabled": true
 }
